@@ -1,0 +1,14 @@
+name: licensed-hfss
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+jobs:
+  hfss:
+    if: github.repository_owner == 'Ahmadh1231'
+    runs-on: [self-hosted, Windows, hfss]
+    steps:
+      - uses: actions/checkout@v4
+      - run: py -3.11 -m pip install -e ".[dev,hfss]"
+      - run: py -3.11 -m pytest -m hfss tests/hfss_integration

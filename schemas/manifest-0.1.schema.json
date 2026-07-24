@@ -1,0 +1,626 @@
+{
+  "$defs": {
+    "Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]+$",
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "context": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "title": "Context",
+          "type": "object"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "Diagnostic",
+      "type": "object"
+    },
+    "EigenmodeRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "mode_count": {
+          "minimum": 1,
+          "title": "Mode Count",
+          "type": "integer"
+        },
+        "frequency_unit": {
+          "default": "Hz",
+          "title": "Frequency Unit",
+          "type": "string"
+        },
+        "q_definition": {
+          "default": "hfss_unloaded_material_and_boundary_loss",
+          "title": "Q Definition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "mode_count"
+      ],
+      "title": "EigenmodeRecord",
+      "type": "object"
+    },
+    "ExportStatus": {
+      "enum": [
+        "building",
+        "complete",
+        "complete_with_warnings",
+        "failed"
+      ],
+      "title": "ExportStatus",
+      "type": "string"
+    },
+    "FieldRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "raw_path": {
+          "title": "Raw Path",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "complex_data": {
+          "title": "Complex Data",
+          "type": "boolean"
+        },
+        "vector": {
+          "title": "Vector",
+          "type": "boolean"
+        },
+        "units": {
+          "title": "Units",
+          "type": "string"
+        },
+        "coordinate_units": {
+          "title": "Coordinate Units",
+          "type": "string"
+        },
+        "coordinate_system": {
+          "title": "Coordinate System",
+          "type": "string"
+        },
+        "grid_type": {
+          "title": "Grid Type",
+          "type": "string"
+        },
+        "region_name": {
+          "title": "Region Name",
+          "type": "string"
+        },
+        "assignment": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assignment",
+          "type": "array"
+        },
+        "object_type": {
+          "title": "Object Type",
+          "type": "string"
+        },
+        "solution": {
+          "title": "Solution",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "frequency_hz": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frequency Hz"
+        },
+        "phase_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phase Deg"
+        },
+        "normalization": {
+          "$ref": "#/$defs/NormalizationKind"
+        },
+        "shape": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Shape",
+          "type": "array"
+        },
+        "point_count": {
+          "minimum": 1,
+          "title": "Point Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "raw_path",
+        "quantity",
+        "complex_data",
+        "vector",
+        "units",
+        "coordinate_units",
+        "coordinate_system",
+        "grid_type",
+        "region_name",
+        "assignment",
+        "object_type",
+        "solution",
+        "normalization",
+        "shape",
+        "point_count"
+      ],
+      "title": "FieldRecord",
+      "type": "object"
+    },
+    "FileRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "source_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Path"
+        },
+        "generated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated By"
+        }
+      },
+      "required": [
+        "path",
+        "role",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "required"
+      ],
+      "title": "FileRecord",
+      "type": "object"
+    },
+    "NormalizationKind": {
+      "enum": [
+        "driven_excitation_dependent",
+        "hfss_eigenmode_peak_1",
+        "user_scaled",
+        "unknown"
+      ],
+      "title": "NormalizationKind",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SolutionKind": {
+      "enum": [
+        "driven_modal",
+        "driven_terminal",
+        "eigenmode"
+      ],
+      "title": "SolutionKind",
+      "type": "string"
+    },
+    "TouchstoneRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "number_of_ports": {
+          "minimum": 1,
+          "title": "Number Of Ports",
+          "type": "integer"
+        },
+        "frequency_unit": {
+          "title": "Frequency Unit",
+          "type": "string"
+        },
+        "parameter_type": {
+          "default": "S",
+          "title": "Parameter Type",
+          "type": "string"
+        },
+        "data_format": {
+          "title": "Data Format",
+          "type": "string"
+        },
+        "renormalized": {
+          "title": "Renormalized",
+          "type": "boolean"
+        },
+        "reference_impedance_ohm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Impedance Ohm"
+        },
+        "port_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Port Names",
+          "type": "array"
+        },
+        "frequency_min_hz": {
+          "title": "Frequency Min Hz",
+          "type": "number"
+        },
+        "frequency_max_hz": {
+          "title": "Frequency Max Hz",
+          "type": "number"
+        },
+        "point_count": {
+          "minimum": 1,
+          "title": "Point Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "number_of_ports",
+        "frequency_unit",
+        "data_format",
+        "renormalized",
+        "port_names",
+        "frequency_min_hz",
+        "frequency_max_hz",
+        "point_count"
+      ],
+      "title": "TouchstoneRecord",
+      "type": "object"
+    },
+    "VariationValue": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "title": "Expression",
+          "type": "string"
+        },
+        "evaluated_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluated Value"
+        },
+        "evaluated_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluated Unit"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "title": "VariationValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "0.1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "exporter_version": {
+      "title": "Exporter Version",
+      "type": "string"
+    },
+    "bundle_status": {
+      "$ref": "#/$defs/ExportStatus"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "export_timestamp_utc": {
+      "format": "date-time",
+      "title": "Export Timestamp Utc",
+      "type": "string"
+    },
+    "project_name": {
+      "title": "Project Name",
+      "type": "string"
+    },
+    "project_file_name": {
+      "title": "Project File Name",
+      "type": "string"
+    },
+    "project_file_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Project File Sha256"
+    },
+    "design_name": {
+      "title": "Design Name",
+      "type": "string"
+    },
+    "design_type": {
+      "title": "Design Type",
+      "type": "string"
+    },
+    "solution_kind": {
+      "$ref": "#/$defs/SolutionKind"
+    },
+    "setup_name": {
+      "title": "Setup Name",
+      "type": "string"
+    },
+    "sweep_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Sweep Name"
+    },
+    "solution_reference": {
+      "title": "Solution Reference",
+      "type": "string"
+    },
+    "variation_id": {
+      "title": "Variation Id",
+      "type": "string"
+    },
+    "variation": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VariationValue"
+      },
+      "title": "Variation",
+      "type": "object"
+    },
+    "aedt_version": {
+      "title": "Aedt Version",
+      "type": "string"
+    },
+    "pyaedt_version": {
+      "title": "Pyaedt Version",
+      "type": "string"
+    },
+    "python_version": {
+      "title": "Python Version",
+      "type": "string"
+    },
+    "operating_system": {
+      "title": "Operating System",
+      "type": "string"
+    },
+    "model_units": {
+      "title": "Model Units",
+      "type": "string"
+    },
+    "reference_coordinate_system": {
+      "title": "Reference Coordinate System",
+      "type": "string"
+    },
+    "ports": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Ports",
+      "type": "array"
+    },
+    "touchstone": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TouchstoneRecord"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "eigenmode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EigenmodeRecord"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/FieldRecord"
+      },
+      "title": "Fields",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileRecord"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    }
+  },
+  "required": [
+    "exporter_version",
+    "bundle_status",
+    "run_id",
+    "export_timestamp_utc",
+    "project_name",
+    "project_file_name",
+    "project_file_sha256",
+    "design_name",
+    "design_type",
+    "solution_kind",
+    "setup_name",
+    "sweep_name",
+    "solution_reference",
+    "variation_id",
+    "variation",
+    "aedt_version",
+    "pyaedt_version",
+    "python_version",
+    "operating_system",
+    "model_units",
+    "reference_coordinate_system",
+    "ports",
+    "touchstone",
+    "eigenmode",
+    "fields",
+    "files",
+    "diagnostics"
+  ],
+  "title": "HFSSRunManifest",
+  "type": "object"
+}

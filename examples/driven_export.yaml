@@ -1,0 +1,44 @@
+schema_version: "0.1.0"
+project:
+  path: ../fixtures/driven/notch_resonator.aedt
+  design: NotchResonator
+  aedt_version: "2026.1"
+  non_graphical: true
+  student_version: false
+  remove_lock: false
+solution:
+  setup: Setup1
+  sweep: Sweep1
+  variation: {}
+  modes: []
+touchstone:
+  enabled: true
+  renormalize: false
+  impedance_ohm: null
+  include_gamma_impedance_comments: true
+export_existing_reports: true
+report_names: [S Parameters]
+export_convergence: true
+export_mesh_stats: true
+export_profile: true
+export_mesh_visualization: true
+keep_raw_exports: true
+strict: true
+keep_failed: false
+portable_paths: true
+max_field_points: 2000000
+fields:
+  - name: device_H
+    quantity: H
+    vector: true
+    assignment: [Substrate, Signal, Ground, AirBox]
+    object_type: Vol
+    reference_coordinate_system: Global
+    export_in_si_system: true
+    export_field_in_reference: true
+    phase_deg: 0.0
+    grid:
+      type: Cartesian
+      start: [-800um, -800um, -20um]
+      stop: [800um, 800um, 100um]
+      step: [10um, 10um, 5um]

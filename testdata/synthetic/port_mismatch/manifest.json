@@ -1,0 +1,175 @@
+{
+  "schema_version": "0.1.0",
+  "exporter_version": "0.1.0",
+  "bundle_status": "complete",
+  "run_id": "1234abcd",
+  "export_timestamp_utc": "2026-07-23T00:00:00Z",
+  "project_name": "synthetic",
+  "project_file_name": "synthetic.aedt",
+  "project_file_sha256": null,
+  "design_name": "Synthetic",
+  "design_type": "HFSS",
+  "solution_kind": "driven_modal",
+  "setup_name": "Setup1",
+  "sweep_name": "Sweep1",
+  "solution_reference": "Setup1 : Sweep1",
+  "variation_id": "nominal",
+  "variation": {},
+  "aedt_version": "synthetic",
+  "pyaedt_version": "synthetic",
+  "python_version": "3.11",
+  "operating_system": "synthetic",
+  "model_units": "mm",
+  "reference_coordinate_system": "Global",
+  "ports": [
+    "1"
+  ],
+  "touchstone": {
+    "path": "network/network.s2p",
+    "number_of_ports": 2,
+    "frequency_unit": "Hz",
+    "parameter_type": "S",
+    "data_format": "RI",
+    "renormalized": false,
+    "reference_impedance_ohm": 50.0,
+    "port_names": [
+      "1",
+      "2"
+    ],
+    "frequency_min_hz": 5000000000.0,
+    "frequency_max_hz": 7000000000.0,
+    "point_count": 3
+  },
+  "eigenmode": null,
+  "fields": [
+    {
+      "path": "fields/hdf5/device_H.h5",
+      "raw_path": "fields/raw/device_H.fld",
+      "quantity": "H",
+      "complex_data": true,
+      "vector": true,
+      "units": "A/m",
+      "coordinate_units": "m",
+      "coordinate_system": "Global",
+      "grid_type": "Cartesian",
+      "region_name": "device_H",
+      "assignment": [
+        "AllObjects"
+      ],
+      "object_type": "Vol",
+      "solution": "Setup1 : Sweep1",
+      "mode": null,
+      "frequency_hz": 6000000000.0,
+      "phase_deg": 0.0,
+      "normalization": "driven_excitation_dependent",
+      "shape": [
+        2,
+        3
+      ],
+      "point_count": 2
+    }
+  ],
+  "files": [
+    {
+      "path": "convergence/convergence_raw.prof",
+      "role": "convergence",
+      "media_type": "application/octet-stream",
+      "sha256": "8bf7481a40d5747ca8a19b45a472e6a537ff8574ad24ba2b728667cd8c0ab49c",
+      "size_bytes": 18,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "convergence/mesh_stats_raw.txt",
+      "role": "mesh_stats",
+      "media_type": "application/octet-stream",
+      "sha256": "6e9501edc2b4e62753779f96c0297556e1e31a78d46db245978b06ae967cd2f0",
+      "size_bytes": 18,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "convergence/adaptive_passes.csv",
+      "role": "convergence",
+      "media_type": "application/octet-stream",
+      "sha256": "f9d3c8be3a8b2964dd71ad07c080f978f9b14bc218f44cea2ecf215be3d5f0e7",
+      "size_bytes": 157,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "export_config.resolved.yaml",
+      "role": "configuration",
+      "media_type": "application/octet-stream",
+      "sha256": "30397bbe9373dfafd3dee07453dbca2f973d1089f938bb0c9a8ade0dac8e455a",
+      "size_bytes": 37,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "design_variables.json",
+      "role": "design_variables",
+      "media_type": "application/octet-stream",
+      "sha256": "e3566b3a06430868d71e9287dfd6c6c520a3da027aabea01951d407ee131dc2f",
+      "size_bytes": 4,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "project_variables.json",
+      "role": "project_variables",
+      "media_type": "application/octet-stream",
+      "sha256": "e3566b3a06430868d71e9287dfd6c6c520a3da027aabea01951d407ee131dc2f",
+      "size_bytes": 4,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "fields/raw/device_H.fld",
+      "role": "field_raw",
+      "media_type": "application/octet-stream",
+      "sha256": "da5cb643ea2ac6c2db30137208d7833e726fd8c9069bbbb0b9c8156abec62ecc",
+      "size_bytes": 84,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "fields/hdf5/device_H.h5",
+      "role": "field_hdf5",
+      "media_type": "application/octet-stream",
+      "sha256": "b5fb5148369f0467744390328276618742e04bc79b9a56bc28ebcff0bf290072",
+      "size_bytes": 22504,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "network/network.s2p",
+      "role": "touchstone",
+      "media_type": "application/octet-stream",
+      "sha256": "8c2fcaf1e50b669862a3e158ee420b0413991c7ac89cb5a171396a05b60d9c14",
+      "size_bytes": 151,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    },
+    {
+      "path": "reports/s_parameters.csv",
+      "role": "s_parameters",
+      "media_type": "application/octet-stream",
+      "sha256": "ea8fc3d97ecc6e54b44e89e784205af087d3104e6b7e1445cab8935ea0f1913e",
+      "size_bytes": 206,
+      "required": true,
+      "source_path": null,
+      "generated_by": "qresaudit-testdata 0.1.0"
+    }
+  ],
+  "diagnostics": []
+}

@@ -1,0 +1,58 @@
+schema_version: "0.1.0"
+project:
+  path: ../fixtures/eigenmode/cavity_resonator.aedt
+  design: CavityResonator
+  aedt_version: "2026.1"
+  non_graphical: true
+  student_version: false
+  remove_lock: false
+solution:
+  setup: Setup1
+  sweep: null
+  variation: {}
+  modes: [1, 2]
+touchstone:
+  enabled: false
+  renormalize: false
+  impedance_ohm: null
+  include_gamma_impedance_comments: false
+export_existing_reports: true
+report_names: [Eigenmode Frequency, Q Factor]
+export_convergence: true
+export_mesh_stats: true
+export_profile: true
+export_mesh_visualization: true
+keep_raw_exports: true
+strict: true
+keep_failed: false
+portable_paths: true
+max_field_points: 2000000
+fields:
+  - name: mode_E
+    quantity: E
+    vector: true
+    assignment: [AllObjects]
+    object_type: Vol
+    reference_coordinate_system: Global
+    export_in_si_system: true
+    export_field_in_reference: true
+    phase_deg: 0.0
+    grid:
+      type: Cartesian
+      start: [-1mm, -1mm, -0.2mm]
+      stop: [1mm, 1mm, 0.5mm]
+      step: [20um, 20um, 10um]
+  - name: mode_H
+    quantity: H
+    vector: true
+    assignment: [AllObjects]
+    object_type: Vol
+    reference_coordinate_system: Global
+    export_in_si_system: true
+    export_field_in_reference: true
+    phase_deg: 0.0
+    grid:
+      type: Cartesian
+      start: [-1mm, -1mm, -0.2mm]
+      stop: [1mm, 1mm, 0.5mm]
+      step: [20um, 20um, 10um]

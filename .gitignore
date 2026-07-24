@@ -1,0 +1,29 @@
+# Python environments and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Test, lint, type-check, and coverage caches
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# QResAudit transient export staging
+*.partial/
+tmp/

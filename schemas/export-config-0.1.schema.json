@@ -1,0 +1,367 @@
+{
+  "$defs": {
+    "FieldExportConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z0-9_]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "vector": {
+          "default": true,
+          "title": "Vector",
+          "type": "boolean"
+        },
+        "assignment": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assignment",
+          "type": "array"
+        },
+        "object_type": {
+          "default": "Vol",
+          "title": "Object Type",
+          "type": "string"
+        },
+        "reference_coordinate_system": {
+          "default": "Global",
+          "title": "Reference Coordinate System",
+          "type": "string"
+        },
+        "export_in_si_system": {
+          "default": true,
+          "title": "Export In Si System",
+          "type": "boolean"
+        },
+        "export_field_in_reference": {
+          "default": true,
+          "title": "Export Field In Reference",
+          "type": "boolean"
+        },
+        "grid": {
+          "$ref": "#/$defs/FieldGridConfig"
+        },
+        "phase_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0.0,
+          "title": "Phase Deg"
+        }
+      },
+      "required": [
+        "name",
+        "quantity",
+        "grid"
+      ],
+      "title": "FieldExportConfig",
+      "type": "object"
+    },
+    "FieldGridConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "default": "Cartesian",
+          "title": "Type",
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center"
+        },
+        "sample_points_file": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Points File"
+        }
+      },
+      "title": "FieldGridConfig",
+      "type": "object"
+    },
+    "ProjectConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "design": {
+          "title": "Design",
+          "type": "string"
+        },
+        "aedt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aedt Version"
+        },
+        "non_graphical": {
+          "default": true,
+          "title": "Non Graphical",
+          "type": "boolean"
+        },
+        "student_version": {
+          "default": false,
+          "title": "Student Version",
+          "type": "boolean"
+        },
+        "remove_lock": {
+          "default": false,
+          "title": "Remove Lock",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "design"
+      ],
+      "title": "ProjectConfig",
+      "type": "object"
+    },
+    "SolutionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "setup": {
+          "title": "Setup",
+          "type": "string"
+        },
+        "sweep": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sweep"
+        },
+        "variation": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variation",
+          "type": "object"
+        },
+        "modes": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Modes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "setup"
+      ],
+      "title": "SolutionConfig",
+      "type": "object"
+    },
+    "TouchstoneConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "renormalize": {
+          "default": false,
+          "title": "Renormalize",
+          "type": "boolean"
+        },
+        "impedance_ohm": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Impedance Ohm"
+        },
+        "include_gamma_impedance_comments": {
+          "default": true,
+          "title": "Include Gamma Impedance Comments",
+          "type": "boolean"
+        }
+      },
+      "title": "TouchstoneConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "0.1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "project": {
+      "$ref": "#/$defs/ProjectConfig"
+    },
+    "solution": {
+      "$ref": "#/$defs/SolutionConfig"
+    },
+    "touchstone": {
+      "$ref": "#/$defs/TouchstoneConfig"
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/FieldExportConfig"
+      },
+      "title": "Fields",
+      "type": "array"
+    },
+    "export_existing_reports": {
+      "default": true,
+      "title": "Export Existing Reports",
+      "type": "boolean"
+    },
+    "report_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Report Names",
+      "type": "array"
+    },
+    "export_convergence": {
+      "default": true,
+      "title": "Export Convergence",
+      "type": "boolean"
+    },
+    "export_mesh_stats": {
+      "default": true,
+      "title": "Export Mesh Stats",
+      "type": "boolean"
+    },
+    "export_profile": {
+      "default": true,
+      "title": "Export Profile",
+      "type": "boolean"
+    },
+    "export_mesh_visualization": {
+      "default": true,
+      "title": "Export Mesh Visualization",
+      "type": "boolean"
+    },
+    "keep_raw_exports": {
+      "default": true,
+      "title": "Keep Raw Exports",
+      "type": "boolean"
+    },
+    "strict": {
+      "default": true,
+      "title": "Strict",
+      "type": "boolean"
+    },
+    "keep_failed": {
+      "default": false,
+      "title": "Keep Failed",
+      "type": "boolean"
+    },
+    "portable_paths": {
+      "default": true,
+      "title": "Portable Paths",
+      "type": "boolean"
+    },
+    "max_field_points": {
+      "default": 2000000,
+      "minimum": 1,
+      "title": "Max Field Points",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "project",
+    "solution"
+  ],
+  "title": "ExportConfig",
+  "type": "object"
+}
