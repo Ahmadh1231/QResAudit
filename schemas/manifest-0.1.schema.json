@@ -422,6 +422,23 @@
           "title": "Frequency Unit",
           "type": "string"
         },
+        "header_reference_impedance_ohm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Header Reference Impedance Ohm"
+        },
+        "matrix_format": {
+          "default": "full",
+          "title": "Matrix Format",
+          "type": "string"
+        },
         "number_of_ports": {
           "minimum": 1,
           "title": "Number Of Ports",

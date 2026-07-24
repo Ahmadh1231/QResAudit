@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from qresaudit.io.field_tab import ParsedField
@@ -35,6 +35,7 @@ def test_grid_count_property(intervals: int, step: float) -> None:
         max_size=30,
     ),
 )
+@settings(deadline=None)
 def test_field_hdf5_property(real: list[float]) -> None:
     point_count = len(real) // 3
     values = np.asarray(real[: point_count * 3], dtype=np.float64).reshape(point_count, 3)

@@ -16,3 +16,11 @@ successful runner combination here with:
 
 Until at least one Driven Modal and one Eigenmode row are recorded, HFSS integration
 is unvalidated and the project must not publish `v0.1.1`.
+
+| AEDT | PyAEDT | Driven Modal | Eigenmode | Status |
+| --- | --- | --- | --- | --- |
+| 2025 R2 | 1.3.x | Not tested | Not tested | Pending |
+| 2026 R1 | 1.3.x | Not tested | Not tested | Pending |
+
+“Tested” may be recorded only with a successful licensed workflow run and the
+corresponding sanitized evidence bundle.

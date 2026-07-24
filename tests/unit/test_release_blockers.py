@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from qresaudit.hashing import read_checksums
 from qresaudit.io.bundle import atomic_staging
-from qresaudit.io.touchstone import network_metadata
+from qresaudit.io.touchstone import load_network, network_metadata, touchstone_file_metadata
 from qresaudit.models.config import ExportConfig
 from qresaudit.validation import validate_bundle
 from qresaudit_hfss.exports.reports import export_existing_reports
@@ -90,6 +90,48 @@ def test_touchstone_preserves_complex_impedance_matrix() -> None:
     metadata = network_metadata(network, "network.s2p", ["P1", "P2"])
     assert metadata["reference_impedance_real_ohm"] == [[50.0, 75.0], [51.0, 76.0]]
     assert metadata["reference_impedance_imag_ohm"] == [[1.0, 2.0], [3.0, 4.0]]
+    assert metadata["wave_definition"] == "power"
+
+
+def test_touchstone_20_header_metadata_is_parsed(tmp_path: Path) -> None:
+    touchstone = tmp_path / "network.ts"
+    touchstone.write_text(
+        "[Version] 2.0\n[Number of Ports] 2\n[Matrix Format] Lower\n# MHz S MA R 50\n",
+        encoding="utf-8",
+    )
+
+    assert touchstone_file_metadata(touchstone) == {
+        "touchstone_version": "2.0",
+        "frequency_unit": "MHz",
+        "parameter_type": "S",
+        "data_format": "MA",
+        "matrix_format": "lower",
+        "header_reference_impedance_ohm": 50.0,
+    }
+
+
+def test_touchstone_10_network_metadata_uses_file_header(tmp_path: Path) -> None:
+    touchstone = tmp_path / "network.s1p"
+    touchstone.write_text(
+        "! one-port fixture\n# GHz S RI R 50\n1.0 0.1 0.0\n2.0 0.2 -0.1\n",
+        encoding="utf-8",
+    )
+    network = load_network(touchstone)
+
+    metadata = network_metadata(
+        network,
+        "network/network.s1p",
+        ["P1"],
+        source_file=touchstone,
+    )
+
+    assert metadata["touchstone_version"] == "1.0"
+    assert metadata["frequency_unit"] == "GHz"
+    assert metadata["parameter_type"] == "S"
+    assert metadata["data_format"] == "RI"
+    assert metadata["matrix_format"] == "full"
+    assert metadata["wave_definition"] == "power"
+    assert metadata["header_reference_impedance_ohm"] == 50.0
 
 
 def test_evaluated_variables_label_declared_and_si_units() -> None:

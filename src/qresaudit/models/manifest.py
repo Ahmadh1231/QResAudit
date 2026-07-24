@@ -49,6 +49,7 @@ class TouchstoneRecord(StrictModel):
     data_format: str
     renormalized: bool
     reference_impedance_ohm: float | None = None
+    header_reference_impedance_ohm: float | None = None
     reference_impedance_real_ohm: list[list[float]] = Field(default_factory=list)
     reference_impedance_imag_ohm: list[list[float]] = Field(default_factory=list)
     renormalization_impedance_ohm: float | None = None
@@ -58,6 +59,7 @@ class TouchstoneRecord(StrictModel):
     source_reference_impedance_imag_ohm: list[list[float]] = Field(default_factory=list)
     touchstone_version: str = "1.0"
     wave_definition: str | None = None
+    matrix_format: str = "full"
     port_names: list[str]
     source_excitation_names: list[str] = Field(default_factory=list)
     port_order_verified: bool = False

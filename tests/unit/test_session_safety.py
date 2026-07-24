@@ -147,6 +147,66 @@ def test_existing_desktop_and_project_remain_open(
     assert desktop_options["aedt_process_id"] == 123
 
 
+def test_project_opened_in_attached_desktop_is_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[tuple[str, object]] = []
+    project_path = tmp_path / "project.aedtz"
+    project_path.write_bytes(b"existing archive")
+
+    class FakeProject:
+        def GetName(self) -> str:
+            return "loaded_project"
+
+    class FakeODesktop:
+        def OpenProject(self, path: str) -> FakeProject:
+            calls.append(("open_project", path))
+            return FakeProject()
+
+        def CloseProject(self, name: str) -> None:
+            calls.append(("close_project", name))
+
+    class FakeDesktop:
+        def __init__(self, **kwargs: object) -> None:
+            self.odesktop = FakeODesktop()
+            self.project_list = ["loaded_project"]
+
+        def project_path(self, name: str) -> str:
+            return str(tmp_path)
+
+        def active_project(self, name: str) -> FakeProject:
+            raise AssertionError("an .aedtz source must not reuse an in-memory project")
+
+        def design_list(self, project: str) -> list[str]:
+            return ["HFSS;Design"]
+
+        def release_desktop(self, *, close_projects: bool, close_desktop: bool) -> None:
+            calls.append(("release", (close_projects, close_desktop)))
+
+    class FakeHfss:
+        project_name = "loaded_project"
+        design_name = "Design"
+
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+    monkeypatch.setitem(sys.modules, "ansys", types.ModuleType("ansys"))
+    monkeypatch.setitem(sys.modules, "ansys.aedt", types.ModuleType("ansys.aedt"))
+    core = types.ModuleType("ansys.aedt.core")
+    core.Desktop = FakeDesktop  # type: ignore[attr-defined]
+    core.Hfss = FakeHfss  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ansys.aedt.core", core)
+
+    with open_hfss_session(
+        ProjectConfig(path=project_path, design="Design", attach_process_id=123)
+    ):
+        pass
+
+    assert ("close_project", "loaded_project") in calls
+    assert ("release", (False, False)) in calls
+
+
 def test_default_session_owns_and_closes_new_desktop(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

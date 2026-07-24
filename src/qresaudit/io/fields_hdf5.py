@@ -5,6 +5,7 @@ from typing import Any, Literal, cast
 import h5py
 import numpy as np
 
+from qresaudit.exceptions import FieldGridOrderingError
 from qresaudit.hashing import sha256_file
 from qresaudit.io.field_tab import PARSER_VERSION, ParsedField
 
@@ -35,10 +36,41 @@ def write_field_hdf5(path: Path, parsed: ParsedField, metadata: dict[str, Any]) 
     if topology == "structured" and int(np.prod(logical_shape, dtype=np.int64)) != len(values):
         raise ValueError("structured grid shape does not match field point count")
     stored_values = values
+    structured_axes: dict[str, np.ndarray] = {}
     if topology == "structured":
+        axis_order = list(metadata.get("axis_order", ["x", "y", "z"]))
+        if axis_order != ["x", "y", "z"]:
+            raise ValueError("structured grid axis_order must be ['x', 'y', 'z']")
         order = cast(Literal["C", "F"], str(metadata.get("flattening_order", "C")))
         if order not in {"C", "F"}:
             raise ValueError("flattening order must be C or F")
+        axis_values = metadata.get("axes", {})
+        for index, axis in enumerate(("x", "y", "z")):
+            values_for_axis = np.asarray(
+                axis_values.get(axis, np.unique(parsed.coordinates_m[:, index])),
+                dtype=np.float64,
+            )
+            if values_for_axis.ndim != 1 or len(values_for_axis) != logical_shape[index]:
+                raise ValueError(f"structured {axis}-axis length does not match grid shape")
+            if not np.all(np.isfinite(values_for_axis)):
+                raise ValueError(f"structured {axis}-axis values must be finite")
+            structured_axes[axis] = values_for_axis
+        mesh = np.meshgrid(
+            structured_axes["x"],
+            structured_axes["y"],
+            structured_axes["z"],
+            indexing="ij",
+        )
+        expected_coordinates = np.column_stack([component.ravel(order=order) for component in mesh])
+        if not np.allclose(
+            expected_coordinates,
+            parsed.coordinates_m,
+            rtol=1e-12,
+            atol=1e-15,
+        ):
+            raise FieldGridOrderingError(
+                "coordinate order does not match declared structured-grid ordering"
+            )
         stored_shape: tuple[int, ...] = (
             (*logical_shape, int(values.shape[-1])) if parsed.is_vector else tuple(logical_shape)
         )
@@ -55,19 +87,14 @@ def write_field_hdf5(path: Path, parsed: ParsedField, metadata: dict[str, Any]) 
         )
         coordinates["points"].attrs["units"] = parsed.coordinate_units
         coordinates["points"].attrs["semantics"] = "sample_point_coordinates"
-        coordinates["points"].attrs["axis_order"] = "x,y,z"
-        coordinates["points"].attrs["flattening_order"] = "row_major"
+        coordinates["points"].attrs["dataset_axis_order"] = json.dumps(["point", "coordinate"])
+        coordinates["points"].attrs["coordinate_labels"] = json.dumps(["x", "y", "z"])
+        coordinates["points"].attrs["flattening_order"] = metadata.get("flattening_order", "C")
         if topology == "structured":
-            axis_values = metadata.get("axes", {})
-            for index, axis in enumerate(("x", "y", "z")):
-                values_for_axis = np.asarray(
-                    axis_values.get(axis, np.unique(parsed.coordinates_m[:, index]))
-                )
-                if index < len(logical_shape) and len(values_for_axis) != logical_shape[index]:
-                    raise ValueError(f"structured {axis}-axis length does not match grid shape")
+            for axis in ("x", "y", "z"):
                 coordinates.create_dataset(
                     axis,
-                    data=values_for_axis,
+                    data=structured_axes[axis],
                 )
         field = h5.create_group("field")
         field.create_dataset("real", data=np.real(stored_values), compression="gzip", shuffle=True)
@@ -82,10 +109,23 @@ def write_field_hdf5(path: Path, parsed: ParsedField, metadata: dict[str, Any]) 
             field[name].attrs["component_labels"] = json.dumps(
                 ["x", "y", "z"] if parsed.is_vector else ["scalar"]
             )
-            field[name].attrs["axis_order"] = "point,component" if parsed.is_vector else "point"
-            field[name].attrs["flattening_order"] = "row_major"
+            dataset_axis_order = (
+                [*metadata.get("axis_order", ["x", "y", "z"]), "component"]
+                if topology == "structured" and parsed.is_vector
+                else (
+                    metadata.get("axis_order", ["x", "y", "z"])
+                    if topology == "structured"
+                    else (["point", "component"] if parsed.is_vector else ["point"])
+                )
+            )
+            field[name].attrs["dataset_axis_order"] = json.dumps(dataset_axis_order)
+            field[name].attrs["flattening_order"] = metadata.get("flattening_order", "C")
         field["magnitude"].attrs["units"] = parsed.value_units
         field["magnitude"].attrs["semantics"] = "field_magnitude"
+        field["magnitude"].attrs["dataset_axis_order"] = json.dumps(
+            metadata.get("axis_order", ["x", "y", "z"]) if topology == "structured" else ["point"]
+        )
+        field["magnitude"].attrs["flattening_order"] = metadata.get("flattening_order", "C")
         meta = h5.create_group("metadata")
         for key, value in effective.items():
             if value is None:
@@ -130,6 +170,8 @@ def read_field_hdf5(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dic
         topology = str(metadata.get("topology", "unstructured"))
         shape = tuple(int(value) for value in metadata.get("shape", []))
         if topology == "structured":
+            if len(shape) != 3:
+                raise ValueError("structured grid shape must contain three axes")
             vector = real.ndim == len(shape) + 1
             expected_value_shape = (*shape, 3) if vector else shape
             expected_magnitude_shape = shape
@@ -138,6 +180,56 @@ def read_field_hdf5(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dic
                 and int(np.prod(shape, dtype=np.int64)) == coordinates.shape[0]
                 and real.shape == expected_value_shape
             )
+            if metadata.get("axis_order") != ["x", "y", "z"]:
+                raise ValueError("structured grid axis order is invalid")
+            order = cast(Literal["C", "F"], str(metadata.get("flattening_order", "C")))
+            if order not in {"C", "F"}:
+                raise ValueError("flattening order must be C or F")
+            try:
+                stored_axes = [
+                    np.asarray(h5[f"coordinates/{axis}"][...], dtype=np.float64)
+                    for axis in ("x", "y", "z")
+                ]
+            except KeyError as exc:
+                raise ValueError("structured coordinate-axis dataset is missing") from exc
+            if any(
+                axis.ndim != 1 or len(axis) != shape[index]
+                for index, axis in enumerate(stored_axes)
+            ):
+                raise ValueError("structured coordinate-axis length is invalid")
+            mesh = np.meshgrid(*stored_axes, indexing="ij")
+            expected_coordinates = np.column_stack(
+                [component.ravel(order=order) for component in mesh]
+            )
+            if not np.allclose(
+                expected_coordinates,
+                coordinates,
+                rtol=1e-12,
+                atol=1e-15,
+            ):
+                raise FieldGridOrderingError(
+                    "stored coordinates do not match structured-grid ordering"
+                )
+            expected_dataset_axes = (
+                ["x", "y", "z", "component"]
+                if vector
+                else [
+                    "x",
+                    "y",
+                    "z",
+                ]
+            )
+            for name in ("real", "imag"):
+                actual_dataset_axes = _decode_attribute(
+                    h5[f"field/{name}"].attrs.get("dataset_axis_order", "")
+                )
+                if actual_dataset_axes != expected_dataset_axes:
+                    raise ValueError(f"field/{name} dataset axis order is invalid")
+            magnitude_axes = _decode_attribute(
+                h5["field/magnitude"].attrs.get("dataset_axis_order", "")
+            )
+            if magnitude_axes != ["x", "y", "z"]:
+                raise ValueError("field/magnitude dataset axis order is invalid")
         else:
             expected_magnitude_shape = real.shape[:-1] if real.ndim > 1 else real.shape
             shape_valid = coordinates.shape[0] == real.shape[0]
@@ -156,9 +248,6 @@ def read_field_hdf5(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, dic
         values = real + 1j * imag
         if topology == "structured":
             point_count = coordinates.shape[0]
-            order = cast(Literal["C", "F"], str(metadata.get("flattening_order", "C")))
-            if order not in {"C", "F"}:
-                raise ValueError("flattening order must be C or F")
             values = values.reshape(
                 (point_count, values.shape[-1]) if values.ndim == 4 else (point_count,),
                 order=order,

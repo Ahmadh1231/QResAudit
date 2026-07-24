@@ -10,11 +10,11 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-${{ matrix.python }}-pip-${{ hashFiles('pyproject.toml') }}
@@ -26,13 +26,16 @@ jobs:
       - run: mypy src
       - run: python tools/check_schemas.py
       - run: >-
-          pytest tests/unit tests/offline_integration
+          pytest tests/unit tests/offline_integration -vv -ra --tb=long
           --junitxml=junit.xml
           --cov=qresaudit
           --cov-report=xml
-          --cov-report=term
+          --cov-report=term-missing
           --cov-fail-under=70
-      - uses: actions/upload-artifact@v4
+      - name: Publish pytest failure summary
+        if: failure()
+        run: python tools/summarize_junit.py junit.xml
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.python }}

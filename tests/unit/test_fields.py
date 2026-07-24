@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from qresaudit.exceptions import FieldGridOrderingError
 from qresaudit.io.field_tab import parse_field_tab
 from qresaudit.io.fields_hdf5 import read_field_hdf5, source_metadata, write_field_hdf5
 
@@ -96,6 +97,94 @@ def test_structured_grid_round_trip_preserves_shape(tmp_path: Path) -> None:
     np.testing.assert_array_equal(restored_values, values)
     assert metadata["shape"] == [2, 2, 1]
     assert metadata["axis_order"] == ["x", "y", "z"]
+
+
+def test_structured_grid_rejects_point_order_mismatch(tmp_path: Path) -> None:
+    coordinates = np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]])
+    values = np.arange(12, dtype=float).reshape(4, 3).astype(complex)
+    parsed = parse_field_tab(
+        _write_vector_field(tmp_path / "misordered.fld", coordinates, values),
+        quantity="E",
+        value_units="V/m",
+        coordinate_units="m",
+    )
+
+    with pytest.raises(FieldGridOrderingError, match="coordinate order"):
+        write_field_hdf5(
+            tmp_path / "misordered.h5",
+            parsed,
+            {
+                "topology": "structured",
+                "shape": [2, 2, 1],
+                "axes": {"x": [0.0, 1.0], "y": [0.0, 1.0], "z": [0.0]},
+                "axis_order": ["x", "y", "z"],
+                "flattening_order": "C",
+            },
+        )
+
+
+def test_structured_dataset_axis_metadata(tmp_path: Path) -> None:
+    import h5py
+
+    coordinates = np.asarray(
+        [[x, y, 0.0] for x in (0.0, 1.0) for y in (0.0, 1.0)],
+        dtype=float,
+    )
+    values = np.arange(12, dtype=float).reshape(4, 3).astype(complex)
+    parsed = parse_field_tab(
+        _write_vector_field(tmp_path / "axes.fld", coordinates, values),
+        quantity="E",
+        value_units="V/m",
+        coordinate_units="m",
+    )
+    target = write_field_hdf5(
+        tmp_path / "axes.h5",
+        parsed,
+        {
+            "topology": "structured",
+            "shape": [2, 2, 1],
+            "axes": {"x": [0.0, 1.0], "y": [0.0, 1.0], "z": [0.0]},
+            "axis_order": ["x", "y", "z"],
+            "flattening_order": "C",
+        },
+    )
+
+    with h5py.File(target, "r") as h5:
+        assert h5["field/real"].attrs["dataset_axis_order"] == ('["x", "y", "z", "component"]')
+        assert h5["field/magnitude"].attrs["dataset_axis_order"] == '["x", "y", "z"]'
+
+
+def test_structured_reader_rejects_tampered_coordinate_order(tmp_path: Path) -> None:
+    import h5py
+
+    coordinates = np.asarray(
+        [[x, y, 0.0] for x in (0.0, 1.0) for y in (0.0, 1.0)],
+        dtype=float,
+    )
+    values = np.arange(12, dtype=float).reshape(4, 3).astype(complex)
+    parsed = parse_field_tab(
+        _write_vector_field(tmp_path / "tampered.fld", coordinates, values),
+        quantity="E",
+        value_units="V/m",
+        coordinate_units="m",
+    )
+    target = write_field_hdf5(
+        tmp_path / "tampered.h5",
+        parsed,
+        {
+            "topology": "structured",
+            "shape": [2, 2, 1],
+            "axes": {"x": [0.0, 1.0], "y": [0.0, 1.0], "z": [0.0]},
+            "axis_order": ["x", "y", "z"],
+            "flattening_order": "C",
+        },
+    )
+    with h5py.File(target, "r+") as h5:
+        points = h5["coordinates/points"][...]
+        h5["coordinates/points"][...] = points[[0, 2, 1, 3]]
+
+    with pytest.raises(FieldGridOrderingError, match="stored coordinates"):
+        read_field_hdf5(target)
 
 
 def _write_vector_field(path: Path, coordinates: np.ndarray, values: np.ndarray) -> Path:

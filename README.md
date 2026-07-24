@@ -1,10 +1,10 @@
 # QResAudit
 
 QResAudit exports solved Ansys HFSS evidence into a portable bundle and validates that
-bundle without AEDT, PyAEDT, or an Ansys license. Version 0.1 supports HFSS 3D Driven
+bundle without AEDT, PyAEDT, or an Ansys license. Version 0.1 targets HFSS 3D Driven
 Modal and Eigenmode results. Driven Terminal export is intentionally disabled
 until terminal/reference-conductor provenance is modeled. Version 0.1.1 is an
-offline/schema stabilization release.
+unreleased offline/schema stabilization candidate.
 
 ## Architecture
 
@@ -54,9 +54,10 @@ It stages to `OUTPUT.partial`, validates, and publishes atomically. Use `--force
 replace an existing bundle; replacement keeps a recoverable backup until final
 validation succeeds. Use `keep_failed: true` to retain failed staging data.
 
-The default session starts and owns a new AEDT desktop, then closes only that desktop.
-Attaching is opt-in through `project.attach_process_id`; attached desktops and projects
-are never closed by QResAudit. Lock removal is forbidden.
+The default session starts and owns a new AEDT desktop. Attaching is opt-in through
+`project.attach_process_id`. QResAudit never closes an attached AEDT desktop and closes
+only projects that it opened during the current export session. Projects that were
+already loaded remain open. Lock removal is forbidden.
 
 Evidence requirements are explicit:
 

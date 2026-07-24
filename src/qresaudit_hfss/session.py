@@ -86,8 +86,8 @@ def open_hfss_session(config: ProjectConfig) -> Iterator[Any]:
     except Exception as exc:
         raise HFSSSessionError(f"HFSS_PROJECT_OPEN_FAILED: {exc}") from exc
     finally:
-        # Close only resources owned by this context. An explicitly attached
-        # process and its projects always remain open.
+        # Never close an explicitly attached desktop. Close only a project that
+        # this context opened, regardless of who owns the desktop process.
         if desktop is not None:
             if owns_project and project_name is not None:
                 with suppress(Exception):
@@ -101,12 +101,20 @@ def open_hfss_session(config: ProjectConfig) -> Iterator[Any]:
 
 def _find_loaded_project(desktop: Any, project_path: Path) -> Any | None:
     target = project_path.resolve()
+    # AEDT reports a saved project's directory and project name separately.
+    # An opened .aedtz archive does not retain a trustworthy source-archive
+    # identity, so it is never treated as an already-loaded source project.
+    if target.suffix.lower() != ".aedt":
+        return None
     for name in desktop.project_list:
         try:
-            directory = Path(str(desktop.project_path(name))).resolve()
-            loaded_path = (directory / f"{name}.aedt").resolve()
+            project = desktop.active_project(name)
+            reported_directory = desktop.project_path(name)
+            if project is None or reported_directory is None:
+                continue
+            loaded_path = (Path(str(reported_directory)) / f"{project.GetName()}.aedt").resolve()
         except Exception:
             continue
-        if loaded_path == target:
-            return desktop.active_project(name)
+        if loaded_path.is_file() and loaded_path.samefile(target):
+            return project
     return None

@@ -70,7 +70,12 @@ class DrivenAdapter:
             exported.replace(target)
             exported = target
         ports = [str(value) for value in self.app.excitation_names]
-        metadata = network_metadata(network, target.relative_to(staging).as_posix(), ports)
+        metadata = network_metadata(
+            network,
+            target.relative_to(staging).as_posix(),
+            ports,
+            source_file=target,
+        )
         metadata["renormalized"] = self.config.touchstone.renormalize
         metadata["renormalization_impedance_ohm"] = (
             self.config.touchstone.impedance_ohm if self.config.touchstone.renormalize else None

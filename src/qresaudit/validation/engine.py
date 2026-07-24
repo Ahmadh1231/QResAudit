@@ -10,7 +10,7 @@ from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.csv import read_eigenmodes, read_s_parameters
 from qresaudit.io.fields_hdf5 import read_field_hdf5
 from qresaudit.io.hfss_convergence import parse_convergence
-from qresaudit.io.touchstone import load_network
+from qresaudit.io.touchstone import load_network, touchstone_file_metadata
 from qresaudit.models.common import (
     Diagnostic,
     EvidenceProfile,
@@ -253,6 +253,32 @@ def _touchstone(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
         )
         diagnostics.append(diagnostic)
     actual_z0 = np.asarray(network.z0)
+    if manifest.schema_version != "0.1.0":
+        parsed_file_metadata = touchstone_file_metadata(safe_bundle_path(bundle, record.path))
+        expected_file_metadata = {
+            "touchstone_version": record.touchstone_version,
+            "frequency_unit": record.frequency_unit,
+            "parameter_type": record.parameter_type,
+            "data_format": record.data_format,
+            "matrix_format": record.matrix_format,
+            "header_reference_impedance_ohm": record.header_reference_impedance_ohm,
+        }
+        if any(parsed_file_metadata[key] != value for key, value in expected_file_metadata.items()):
+            diagnostics.append(
+                error(
+                    "VALIDATION_TOUCHSTONE_HEADER_MISMATCH",
+                    "Manifest Touchstone metadata differs from the file header",
+                    record.path,
+                )
+            )
+        if record.wave_definition != str(getattr(network, "s_def", "power")):
+            diagnostics.append(
+                error(
+                    "VALIDATION_TOUCHSTONE_WAVE_DEFINITION_MISMATCH",
+                    "Manifest wave definition differs from the parsed network",
+                    record.path,
+                )
+            )
     if record.reference_impedance_real_ohm:
         expected_real = np.asarray(record.reference_impedance_real_ohm)
         expected_imag = np.asarray(record.reference_impedance_imag_ohm)

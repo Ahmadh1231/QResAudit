@@ -10,6 +10,10 @@ class DataFormatError(QResAuditError):
     pass
 
 
+class FieldGridOrderingError(DataFormatError):
+    pass
+
+
 class PreflightError(QResAuditError):
     pass
 
