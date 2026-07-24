@@ -4,9 +4,13 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from qresaudit.units import RECOGNIZED_FIELD_UNITS
+from qresaudit.units import (
+    RECOGNIZED_COORDINATE_UNITS,
+    RECOGNIZED_FIELD_UNITS,
+    unit_factor,
+)
 
-PARSER_VERSION = "0.1.0"
+PARSER_VERSION = "0.1.1"
 
 
 @dataclass(frozen=True)
@@ -36,7 +40,8 @@ def parse_field_tab(
     *,
     quantity: str | None = None,
     value_units: str | None = None,
-    coordinate_scale: float = 1.0,
+    coordinate_units: str | None = None,
+    coordinate_scale: float | None = None,
 ) -> ParsedField:
     """Parse whitespace/comma-delimited AEDT-like field data.
 
@@ -45,7 +50,7 @@ def parse_field_tab(
     Comment headers may define ``quantity`` and ``units``.
     """
     headers: list[str] = []
-    rows: list[list[float]] = []
+    rows: list[list[complex]] = []
     for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         stripped = line.strip()
         if not stripped:
@@ -55,7 +60,7 @@ def parse_field_tab(
             continue
         normalized = stripped.replace(",", " ").replace("(", " ").replace(")", " ")
         try:
-            rows.append([float(token) for token in normalized.split()])
+            rows.append([complex(token.lower().replace("i", "j")) for token in normalized.split()])
         except ValueError:
             if not rows:
                 headers.append(stripped)
@@ -69,21 +74,37 @@ def parse_field_tab(
     width = widths.pop()
     if width not in {4, 5, 6, 9}:
         raise ValueError(f"unsupported field column count: {width}")
-    array = np.asarray(rows, dtype=np.float64)
-    coordinates = np.asarray(array[:, :3] * coordinate_scale, dtype=np.float64)
+    array = np.asarray(rows, dtype=np.complex128)
+    if np.any(np.imag(array[:, :3]) != 0):
+        raise ValueError("field coordinates must be real")
+    metadata = _header_metadata(headers)
+    source_coordinate_units = (
+        metadata.get("coordinate_units")
+        or metadata.get("coordinate units")
+        or metadata.get("length_units")
+        or coordinate_units
+    )
+    if coordinate_scale is None:
+        if source_coordinate_units not in RECOGNIZED_COORDINATE_UNITS:
+            raise ValueError("field coordinate units are absent or unsupported")
+        coordinate_scale = unit_factor(source_coordinate_units)
+    coordinates = np.asarray(np.real(array[:, :3]) * coordinate_scale, dtype=np.float64)
+    if len({tuple(point) for point in coordinates}) != len(coordinates):
+        raise ValueError("field export contains duplicate coordinates")
     if width == 4:
-        values = array[:, 3].astype(np.complex128)
-        is_vector, is_complex = False, False
+        values = array[:, 3]
+        is_vector, is_complex = False, bool(np.any(np.imag(values) != 0))
     elif width == 5:
-        values = array[:, 3] + 1j * array[:, 4]
+        values = np.real(array[:, 3]) + 1j * np.real(array[:, 4])
         is_vector, is_complex = False, True
     elif width == 6:
-        values = array[:, 3:6].astype(np.complex128)
-        is_vector, is_complex = True, False
+        values = array[:, 3:6]
+        is_vector, is_complex = True, bool(np.any(np.imag(values) != 0))
     else:
-        values = array[:, 3::2] + 1j * array[:, 4::2]
+        values = np.real(array[:, 3::2]) + 1j * np.real(array[:, 4::2])
         is_vector, is_complex = True, True
-    metadata = _header_metadata(headers)
+    if not np.all(np.isfinite(coordinates)) or not np.all(np.isfinite(values)):
+        raise ValueError("field export contains nonfinite values")
     parsed_quantity = quantity or metadata.get("quantity", "")
     parsed_units = value_units or metadata.get("units", "")
     if parsed_units and parsed_units not in RECOGNIZED_FIELD_UNITS:

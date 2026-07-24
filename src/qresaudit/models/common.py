@@ -10,6 +10,29 @@ class SolutionKind(StrEnum):
     EIGENMODE = "eigenmode"
 
 
+class EvidenceProfile(StrEnum):
+    MINIMAL = "minimal"
+    STANDARD = "standard"
+    STRICT = "strict"
+
+
+class FieldRepresentation(StrEnum):
+    REAL_GAUGE = "real_gauge"
+    COMPLEX_PHASOR = "complex_phasor"
+    PHASE_EVALUATED_REAL = "phase_evaluated_real"
+    QUADRATURE_RECONSTRUCTED = "quadrature_reconstructed"
+    MAGNITUDE_ONLY = "magnitude_only"
+
+
+class PhasorConvention(StrEnum):
+    EXP_POSITIVE_IWT_PEAK = "exp_positive_iwt_peak"
+    EXP_NEGATIVE_IWT_PEAK = "exp_negative_iwt_peak"
+    EXP_POSITIVE_IWT_RMS = "exp_positive_iwt_rms"
+    EXP_NEGATIVE_IWT_RMS = "exp_negative_iwt_rms"
+    NOT_APPLICABLE = "not_applicable"
+    UNKNOWN = "unknown"
+
+
 class Severity(StrEnum):
     INFO = "info"
     WARNING = "warning"

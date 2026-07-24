@@ -11,4 +11,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: py -3.11 -m pip install -e ".[dev,hfss]"
-      - run: py -3.11 -m pytest -m hfss tests/hfss_integration
+      - name: Require licensed fixture configuration
+        shell: pwsh
+        run: |
+          $required = @(
+            "QRESAUDIT_HFSS_DRIVEN_CONFIG",
+            "QRESAUDIT_HFSS_EIGENMODE_CONFIG"
+          )
+          foreach ($name in $required) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "$name must be configured on the licensed runner"
+            }
+            if (-not (Test-Path -LiteralPath $value -PathType Leaf)) {
+              throw "$name does not name an existing configuration file: $value"
+            }
+          }
+      - run: >-
+          py -3.11 -m pytest -m hfss tests/hfss_integration
+          --junitxml=hfss-junit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: licensed-hfss-results
+          path: |
+            hfss-junit.xml
+            examples/golden/

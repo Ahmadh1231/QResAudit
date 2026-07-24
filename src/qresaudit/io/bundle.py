@@ -1,15 +1,24 @@
 import json
 import os
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from qresaudit.models.manifest import HFSSRunManifest
 
 
 def safe_bundle_path(bundle: Path, relative: str) -> Path:
-    candidate = (bundle / relative).resolve()
+    relative_path = PurePosixPath(relative)
+    if relative_path.is_absolute() or ".." in relative_path.parts or "\\" in relative:
+        raise ValueError(f"path escapes bundle: {relative}")
+    lexical = bundle.joinpath(*relative_path.parts)
+    current = bundle
+    for part in relative_path.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"symlink path component is forbidden: {relative}")
+    candidate = lexical.resolve()
     root = bundle.resolve()
     if candidate != root and root not in candidate.parents:
         raise ValueError(f"path escapes bundle: {relative}")
@@ -45,11 +54,18 @@ def prepare_bundle_directories(root: Path) -> None:
 
 @contextmanager
 def atomic_staging(
-    output: Path, *, force: bool = False, keep_failed: bool = False
+    output: Path,
+    *,
+    force: bool = False,
+    keep_failed: bool = False,
+    validate_final: Callable[[Path], None] | None = None,
 ) -> Iterator[Path]:
     staging = output.with_name(output.name + ".partial")
+    backup = output.with_name(output.name + ".backup")
     if output.exists() and not force:
         raise FileExistsError(f"destination exists: {output}; use --force")
+    if backup.exists():
+        raise FileExistsError(f"stale backup exists: {backup}; inspect or restore it first")
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
@@ -57,11 +73,25 @@ def atomic_staging(
     try:
         yield staging
         if output.exists():
-            if output.is_dir():
-                shutil.rmtree(output)
+            os.replace(output, backup)
+        try:
+            os.replace(staging, output)
+            if validate_final is not None:
+                validate_final(output)
+        except Exception:
+            if output.exists():
+                if output.is_dir():
+                    shutil.rmtree(output)
+                else:
+                    output.unlink()
+            if backup.exists():
+                os.replace(backup, output)
+            raise
+        if backup.exists():
+            if backup.is_dir():
+                shutil.rmtree(backup)
             else:
-                output.unlink()
-        os.replace(staging, output)
+                backup.unlink()
     except Exception:
         if not keep_failed and staging.exists():
             shutil.rmtree(staging)

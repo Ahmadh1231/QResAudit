@@ -1,4 +1,5 @@
-schema_version: "0.1.0"
+schema_version: "0.1.1"
+evidence_profile: strict
 project:
   path: ../fixtures/eigenmode/cavity_resonator.aedt
   design: CavityResonator
@@ -37,6 +38,9 @@ fields:
     export_in_si_system: true
     export_field_in_reference: true
     phase_deg: 0.0
+    phase_unit: deg
+    coordinate_units: mm
+    phasor_convention: exp_positive_iwt_peak
     grid:
       type: Cartesian
       start: [-1mm, -1mm, -0.2mm]
@@ -51,6 +55,9 @@ fields:
     export_in_si_system: true
     export_field_in_reference: true
     phase_deg: 0.0
+    phase_unit: deg
+    coordinate_units: mm
+    phasor_convention: exp_positive_iwt_peak
     grid:
       type: Cartesian
       start: [-1mm, -1mm, -0.2mm]

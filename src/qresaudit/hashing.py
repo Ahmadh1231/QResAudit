@@ -1,6 +1,7 @@
 import hashlib
 import json
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -18,7 +19,7 @@ def stable_hash(value: Any) -> str:
 
 
 def run_id_for(value: Any) -> str:
-    return stable_hash(value)[:8]
+    return stable_hash(value)[:32]
 
 
 def write_checksums(bundle: Path) -> Path:
@@ -37,7 +38,17 @@ def read_checksums(path: Path) -> dict[str, str]:
         if not line.strip():
             continue
         digest, separator, relative = line.partition("  ")
-        if not separator or len(digest) != 64:
+        if not separator or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
             raise ValueError(f"malformed checksum line {line_number}")
+        relative_path = PurePosixPath(relative)
+        if (
+            not relative
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+            or "\\" in relative
+        ):
+            raise ValueError(f"unsafe checksum path on line {line_number}")
+        if relative in result:
+            raise ValueError(f"duplicate checksum entry for {relative}")
         result[relative] = digest
     return result

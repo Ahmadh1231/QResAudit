@@ -9,11 +9,15 @@ from qresaudit.hashing import read_checksums, sha256_file
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.csv import read_eigenmodes, read_s_parameters
 from qresaudit.io.fields_hdf5 import read_field_hdf5
+from qresaudit.io.hfss_convergence import parse_convergence
 from qresaudit.io.touchstone import load_network
 from qresaudit.models.common import (
     Diagnostic,
+    EvidenceProfile,
     ExportStatus,
+    FieldRepresentation,
     NormalizationKind,
+    PhasorConvention,
     Severity,
     error,
     info,
@@ -87,6 +91,16 @@ def _files(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
     else:
         try:
             checksums = read_checksums(checksum_path)
+            checksum_paths = set(checksums)
+            missing_checksum_entries = seen - checksum_paths
+            for relative in sorted(missing_checksum_entries):
+                diagnostics.append(
+                    error(
+                        "VALIDATION_CHECKSUM_ENTRY_MISSING",
+                        "Manifest file is absent from checksum index",
+                        relative,
+                    )
+                )
             for relative, digest in checksums.items():
                 path = safe_bundle_path(bundle, relative)
                 if not path.is_file() or sha256_file(path) != digest:
@@ -97,16 +111,36 @@ def _files(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
             diagnostics.append(
                 error("VALIDATION_CHECKSUM_FILE_INVALID", str(exc), "checksums.sha256")
             )
+    expected = seen | {"manifest.json", "checksums.sha256"}
+    for path in bundle.rglob("*"):
+        relative = path.relative_to(bundle).as_posix()
+        if path.is_symlink():
+            diagnostics.append(
+                error("VALIDATION_SYMLINK_FORBIDDEN", "Symlinks are not allowed", relative)
+            )
+        elif path.is_file() and relative not in expected:
+            diagnostics.append(
+                error("VALIDATION_UNEXPECTED_FILE", "File is not listed in manifest", relative)
+            )
     return diagnostics
 
 
 def _solution_contract(bundle: Path, manifest: HFSSRunManifest, strict: bool) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
+    if manifest.schema_version != "0.1.0":
+        if manifest.project_file_sha256 is None:
+            diagnostics.append(
+                error("VALIDATION_PROJECT_HASH_MISSING", "Source project hash is required")
+            )
+        if len(manifest.run_id) != 32:
+            diagnostics.append(error("VALIDATION_RUN_ID_WEAK", "Run ID must contain 128 bits"))
     if manifest.bundle_status not in {ExportStatus.COMPLETE, ExportStatus.COMPLETE_WITH_WARNINGS}:
         diagnostics.append(
             error("VALIDATION_BUNDLE_INCOMPLETE", f"Bundle state is {manifest.bundle_status}")
         )
-    required_roles = {"convergence", "mesh_stats"}
+    required_roles: set[str] = set()
+    if manifest.evidence_profile in {EvidenceProfile.STANDARD, EvidenceProfile.STRICT}:
+        required_roles.update({"convergence", "mesh_stats"})
     actual_roles = {record.role for record in manifest.files if record.required}
     for role in sorted(required_roles - actual_roles):
         diagnostics.append(
@@ -135,22 +169,24 @@ def _solution_contract(bundle: Path, manifest: HFSSRunManifest, strict: bool) ->
                     "Eigenmode bundle contains Touchstone metadata",
                 )
             )
-        selected_modes = {field.mode for field in manifest.fields}
-        for mode in sorted(mode for mode in selected_modes if mode is not None):
-            quantities = {field.quantity for field in manifest.fields if field.mode == mode}
-            if not {"E", "H"}.issubset(quantities):
-                diagnostics.append(
-                    error(
-                        "VALIDATION_EIGENMODE_FIELDS_MISSING", f"Mode {mode} lacks E and H fields"
+        if manifest.evidence_profile is EvidenceProfile.STRICT:
+            selected_modes = {field.mode for field in manifest.fields}
+            for mode in sorted(mode for mode in selected_modes if mode is not None):
+                quantities = {field.quantity for field in manifest.fields if field.mode == mode}
+                if not {"E", "H"}.issubset(quantities):
+                    diagnostics.append(
+                        error(
+                            "VALIDATION_EIGENMODE_FIELDS_MISSING",
+                            f"Mode {mode} lacks E and H fields",
+                        )
                     )
-                )
-    if not manifest.fields:
+    if manifest.evidence_profile is EvidenceProfile.STRICT and not manifest.fields:
         diagnostics.append(error("VALIDATION_REQUIRED_FILE_MISSING", "Bundle has no field records"))
     if strict:
         for record in manifest.files:
             if record.role == "convergence" and record.path.endswith(".csv"):
                 try:
-                    rows = __import__("pandas").read_csv(bundle / record.path)
+                    rows = parse_convergence(bundle / record.path)
                     if "converged" in rows and len(rows) and not bool(rows.iloc[-1]["converged"]):
                         diagnostics.append(
                             error(
@@ -159,8 +195,14 @@ def _solution_contract(bundle: Path, manifest: HFSSRunManifest, strict: bool) ->
                                 record.path,
                             )
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    diagnostics.append(
+                        error(
+                            "CONVERGENCE_FILE_UNREADABLE",
+                            str(exc),
+                            record.path,
+                        )
+                    )
     return diagnostics
 
 
@@ -195,6 +237,79 @@ def _touchstone(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
                 record.path,
             )
         )
+    if not record.port_order_verified:
+        diagnostic = (
+            error(
+                "VALIDATION_TOUCHSTONE_PORT_ORDER_UNVERIFIED",
+                "Touchstone port order is not independently identified",
+                record.path,
+            )
+            if manifest.evidence_profile is EvidenceProfile.STRICT
+            else warning(
+                "VALIDATION_TOUCHSTONE_PORT_ORDER_UNVERIFIED",
+                "Touchstone port order is not independently identified",
+                record.path,
+            )
+        )
+        diagnostics.append(diagnostic)
+    actual_z0 = np.asarray(network.z0)
+    if record.reference_impedance_real_ohm:
+        expected_real = np.asarray(record.reference_impedance_real_ohm)
+        expected_imag = np.asarray(record.reference_impedance_imag_ohm)
+        if (
+            expected_real.shape != actual_z0.shape
+            or expected_imag.shape != actual_z0.shape
+            or not np.allclose(expected_real + 1j * expected_imag, actual_z0)
+        ):
+            diagnostics.append(
+                error(
+                    "VALIDATION_TOUCHSTONE_IMPEDANCE_MISMATCH",
+                    "Manifest reference impedances differ from the network",
+                    record.path,
+                )
+            )
+    if record.renormalized:
+        if (
+            not record.source_impedance_preserved
+            or not record.source_impedance_path
+            or not record.source_reference_impedance_real_ohm
+            or not record.source_reference_impedance_imag_ohm
+        ):
+            diagnostics.append(
+                error(
+                    "VALIDATION_TOUCHSTONE_SOURCE_IMPEDANCE_MISSING",
+                    "Renormalized Touchstone lacks preserved source-normalization evidence",
+                    record.path,
+                )
+            )
+        else:
+            try:
+                source_network = load_network(
+                    safe_bundle_path(bundle, record.source_impedance_path)
+                )
+                source_z0 = np.asarray(source_network.z0)
+                source_real = np.asarray(record.source_reference_impedance_real_ohm)
+                source_imag = np.asarray(record.source_reference_impedance_imag_ohm)
+                if (
+                    source_real.shape != source_z0.shape
+                    or source_imag.shape != source_z0.shape
+                    or not np.allclose(source_real + 1j * source_imag, source_z0)
+                ):
+                    diagnostics.append(
+                        error(
+                            "VALIDATION_TOUCHSTONE_SOURCE_IMPEDANCE_MISMATCH",
+                            "Preserved source impedances differ from the source network",
+                            record.source_impedance_path,
+                        )
+                    )
+            except Exception as exc:
+                diagnostics.append(
+                    error(
+                        "VALIDATION_TOUCHSTONE_SOURCE_IMPEDANCE_UNREADABLE",
+                        str(exc),
+                        record.source_impedance_path,
+                    )
+                )
     csv_path = bundle / "reports" / "s_parameters.csv"
     if csv_path.is_file():
         try:
@@ -282,8 +397,54 @@ def _fields(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
                 raise ValueError("field values or magnitude are invalid")
             if field.point_count != coordinates.shape[0]:
                 raise ValueError("manifest point count differs")
+            expected_shape = (
+                [
+                    *[int(value) for value in metadata.get("shape", [])],
+                    *([3] if field.vector else []),
+                ]
+                if metadata.get("topology") == "structured"
+                else list(values.shape)
+            )
+            if expected_shape != field.shape:
+                raise ValueError("manifest field shape differs")
+            if len({tuple(point) for point in coordinates}) != len(coordinates):
+                raise ValueError("field coordinates contain duplicate points")
             if str(metadata.get("normalization", "")) != field.normalization.value:
                 raise ValueError("normalization metadata differs from manifest")
+            if manifest.schema_version != "0.1.0":
+                if str(metadata.get("representation", "")) != field.representation.value:
+                    raise ValueError("field representation metadata differs from manifest")
+                if str(metadata.get("phasor_convention", "")) != field.phasor_convention.value:
+                    raise ValueError("phasor convention metadata differs from manifest")
+            if (
+                manifest.schema_version != "0.1.0"
+                and field.representation is FieldRepresentation.MAGNITUDE_ONLY
+            ):
+                raise ValueError("magnitude-only fields are insufficient for phase-sensitive use")
+            if (
+                manifest.schema_version != "0.1.0"
+                and field.representation
+                in {
+                    FieldRepresentation.COMPLEX_PHASOR,
+                    FieldRepresentation.QUADRATURE_RECONSTRUCTED,
+                }
+                and field.phasor_convention is PhasorConvention.UNKNOWN
+            ):
+                raise ValueError("complex field is missing an explicit phasor convention")
+            if metadata.get("topology") == "structured":
+                shape = [int(value) for value in metadata.get("shape", [])]
+                if len(shape) != 3 or int(np.prod(shape)) != field.point_count:
+                    raise ValueError("structured grid shape is invalid")
+                if metadata.get("axis_order") != field.axis_order:
+                    raise ValueError("structured grid axis order differs")
+                if metadata.get("flattening_order") != field.flattening_order:
+                    raise ValueError("structured grid flattening order differs")
+            if (
+                manifest.schema_version != "0.1.0"
+                and manifest.solution_kind.value.startswith("driven")
+                and (field.frequency_hz is None or not field.excitation)
+            ):
+                raise ValueError("driven field is missing explicit frequency or excitation context")
             raw_path = safe_bundle_path(bundle, field.raw_path)
             if str(metadata.get("source_raw_sha256", "")) != sha256_file(raw_path):
                 raise ValueError("source raw checksum differs")
@@ -297,6 +458,27 @@ def _modes(bundle: Path, manifest: HFSSRunManifest) -> list[Diagnostic]:
         return []
     try:
         modes = read_eigenmodes(safe_bundle_path(bundle, manifest.eigenmode.path))
+        for column in ("frequency_real_hz", "frequency_imag_hz", "q_hfss_unloaded"):
+            if column not in modes:
+                continue
+            present = modes[column].dropna().to_numpy(dtype=float)
+            if not np.all(np.isfinite(present)):
+                return [
+                    error("VALIDATION_EIGENMODE_NONFINITE", f"{column} contains nonfinite values")
+                ]
+        if "frequency_real_hz" in modes and np.any(modes["frequency_real_hz"] <= 0):
+            return [error("VALIDATION_EIGENFREQUENCY_INVALID", "Eigenfrequencies must be positive")]
+        if "q_hfss_unloaded" in modes:
+            q_values = modes["q_hfss_unloaded"].dropna().to_numpy(dtype=float)
+            if np.any(q_values < 0):
+                return [error("VALIDATION_Q_INVALID", "Eigenmode Q values cannot be negative")]
+            if np.any(q_values == 0):
+                return [
+                    warning(
+                        "VALIDATION_Q_ZERO",
+                        "Zero Q is preserved as a physical value; use null for missing data",
+                    )
+                ]
         available = {int(mode) for mode in modes["mode"]}
         selected = {field.mode for field in manifest.fields if field.mode is not None}
         if not selected.issubset(available):

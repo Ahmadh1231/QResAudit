@@ -58,6 +58,7 @@ def _static_records(staging: Path) -> list[FileRecord]:
         "export_config.resolved.yaml": ("configuration", True),
         "design_variables.json": ("design_variables", True),
         "project_variables.json": ("project_variables", True),
+        "solved_variation.json": ("solved_variation", True),
         "reports/report_index.json": ("report_index", False),
         "fields/field_index.json": ("field_index", True),
         "logs/export.jsonl": ("structured_log", False),
@@ -72,16 +73,29 @@ def _static_records(staging: Path) -> list[FileRecord]:
 def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) -> Path:
     if ".aedtresults" in {part.lower() for part in output.parts}:
         raise PreflightError("output may not be inside an .aedtresults directory")
+    source_project_hash = project_hash(config.project.path)
     stable_identity = {
-        "project": config.project.path.name,
+        "project_sha256": source_project_hash,
         "design": config.project.design,
         "setup": config.solution.setup,
         "sweep": config.solution.sweep,
         "variation": config.solution.variation,
+        "exporter_version": __version__,
         "config": config.model_dump(mode="json", exclude={"keep_failed"}),
     }
     run_id = run_id_for(stable_identity)
-    with atomic_staging(output, force=force, keep_failed=config.keep_failed) as staging:
+
+    def validate_published(path: Path) -> None:
+        published = validate_bundle(path, strict=config.strict)
+        if not published.valid:
+            raise BundleValidationError("published bundle failed final validation")
+
+    with atomic_staging(
+        output,
+        force=force,
+        keep_failed=config.keep_failed,
+        validate_final=validate_published,
+    ) as staging:
         _write_log(staging, "export.started", project=config.project.path.name)
         with open_hfss_session(config.project) as app:
             inspection = inspect_design(app)
@@ -95,6 +109,10 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
             capabilities = detect_capabilities(app)
             adapter = adapter_for(app, config, capabilities)
             diagnostics.extend(adapter.preflight())
+            if any(item.severity == Severity.ERROR for item in diagnostics):
+                raise PreflightError(
+                    "; ".join(f"{item.code}: {item.message}" for item in diagnostics)
+                )
             resolved_path = staging / "export_config.resolved.yaml"
             resolved_path.write_text(
                 yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False),
@@ -102,6 +120,7 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
             )
             _json_file(staging / "design_variables.json", inspection.design_variables)
             _json_file(staging / "project_variables.json", inspection.project_variables)
+            _json_file(staging / "solved_variation.json", config.solution.variation)
             primary_files, touchstone, eigenmode = adapter.export_primary_results(staging)
             evidence_files = adapter.export_evidence(staging)
             field_files, fields = adapter.export_fields(staging)
@@ -135,11 +154,9 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
                 + report_files
                 + _static_records(staging)
             )
-            variation_values = {
-                **inspection.project_variables,
-                **inspection.design_variables,
-                **config.solution.variation,
-            }
+            project_variables = evaluated_variables(inspection.project_variables)
+            design_variables = evaluated_variables(inspection.design_variables)
+            solved_variation = evaluated_variables(config.solution.variation)
             manifest = HFSSRunManifest(
                 exporter_version=__version__,
                 bundle_status=ExportStatus.COMPLETE,
@@ -147,7 +164,7 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
                 export_timestamp_utc=datetime.now(UTC),
                 project_name=inspection.project_name,
                 project_file_name=config.project.path.name,
-                project_file_sha256=project_hash(config.project.path),
+                project_file_sha256=source_project_hash,
                 design_name=inspection.design_name,
                 design_type=inspection.design_type,
                 solution_kind=inspection.solution_kind,
@@ -158,8 +175,12 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
                     if config.solution.sweep
                     else f"{config.solution.setup} : LastAdaptive"
                 ),
-                variation_id="nominal" if not config.solution.variation else run_id,
-                variation=evaluated_variables(variation_values),
+                variation_id=run_id,
+                variation=solved_variation,
+                project_variables=project_variables,
+                design_variables=design_variables,
+                solved_variation=solved_variation,
+                evidence_profile=config.evidence_profile,
                 aedt_version=str(
                     getattr(app, "aedt_version_id", config.project.aedt_version or "unknown")
                 ),
@@ -168,7 +189,7 @@ def export_bundle(config: ExportConfig, output: Path, *, force: bool = False) ->
                 operating_system=platform.platform(),
                 model_units=inspection.model_units,
                 reference_coordinate_system="Global",
-                ports=inspection.ports,
+                ports=touchstone.port_names if touchstone is not None else inspection.ports,
                 touchstone=touchstone,
                 eigenmode=eigenmode,
                 fields=fields,

@@ -9,4 +9,6 @@ def test_si_conversion() -> None:
 
 def test_variation_and_run_id_are_stable() -> None:
     assert canonical_variation({"b": "2um", "a": "1um"}) == "a=1um;b=2um"
-    assert run_id_for({"b": 2, "a": 1}) == run_id_for({"a": 1, "b": 2})
+    run_id = run_id_for({"b": 2, "a": 1})
+    assert run_id == run_id_for({"a": 1, "b": 2})
+    assert len(run_id) == 32

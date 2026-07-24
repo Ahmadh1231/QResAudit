@@ -1,4 +1,5 @@
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,7 @@ def export_existing_reports(
     diagnostics: list[Diagnostic] = []
     output_dir = staging / "reports" / "existing"
     output_dir.mkdir(parents=True, exist_ok=True)
-    for report_name in selected:
+    for report_number, report_name in enumerate(selected, 1):
         if report_name not in available_reports:
             diagnostics.append(
                 warning(
@@ -37,28 +38,34 @@ def export_existing_reports(
                 )
             )
             continue
-        before = set(output_dir.glob("*.csv"))
+        report_id = f"report_{report_number:04d}"
+        raw_dir = staging / "reports" / "raw" / report_id
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        before = set(raw_dir.glob("*.csv"))
         try:
-            result = app.post.export_report_to_csv(str(output_dir), report_name)
-            after = set(output_dir.glob("*.csv"))
+            result = app.post.export_report_to_csv(str(raw_dir), report_name)
+            after = set(raw_dir.glob("*.csv"))
             created = sorted(after - before)
             if isinstance(result, str) and Path(result).is_file():
                 exported = Path(result)
             elif created:
                 exported = created[-1]
             else:
-                expected = output_dir / f"{report_name}.csv"
+                expected = raw_dir / f"{report_name}.csv"
                 if not expected.is_file():
                     raise RuntimeError("PyAEDT did not return or create a CSV")
                 exported = expected
-            canonical = output_dir / f"{_safe_name(report_name)}.csv"
-            if exported != canonical:
-                exported.replace(canonical)
+            raw = exported
+            canonical = output_dir / f"{report_id}_{_safe_name(report_name)}.csv"
+            shutil.copy2(raw, canonical)
+            records.append(file_record(raw, staging, "existing_report_raw", False))
             records.append(file_record(canonical, staging, "existing_report", False))
             index.append(
                 {
+                    "id": report_id,
                     "name": report_name,
                     "path": canonical.relative_to(staging).as_posix(),
+                    "raw_path": raw.relative_to(staging).as_posix(),
                 }
             )
         except Exception as exc:

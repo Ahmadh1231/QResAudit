@@ -8,25 +8,6 @@
           "title": "Code",
           "type": "string"
         },
-        "severity": {
-          "$ref": "#/$defs/Severity"
-        },
-        "message": {
-          "title": "Message",
-          "type": "string"
-        },
-        "path": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Path"
-        },
         "context": {
           "additionalProperties": {
             "anyOf": [
@@ -46,6 +27,25 @@
           },
           "title": "Context",
           "type": "object"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
         }
       },
       "required": [
@@ -59,8 +59,9 @@
     "EigenmodeRecord": {
       "additionalProperties": false,
       "properties": {
-        "path": {
-          "title": "Path",
+        "frequency_unit": {
+          "default": "Hz",
+          "title": "Frequency Unit",
           "type": "string"
         },
         "mode_count": {
@@ -68,9 +69,8 @@
           "title": "Mode Count",
           "type": "integer"
         },
-        "frequency_unit": {
-          "default": "Hz",
-          "title": "Frequency Unit",
+        "path": {
+          "title": "Path",
           "type": "string"
         },
         "q_definition": {
@@ -86,6 +86,15 @@
       "title": "EigenmodeRecord",
       "type": "object"
     },
+    "EvidenceProfile": {
+      "enum": [
+        "minimal",
+        "standard",
+        "strict"
+      ],
+      "title": "EvidenceProfile",
+      "type": "string"
+    },
     "ExportStatus": {
       "enum": [
         "building",
@@ -99,46 +108,6 @@
     "FieldRecord": {
       "additionalProperties": false,
       "properties": {
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "raw_path": {
-          "title": "Raw Path",
-          "type": "string"
-        },
-        "quantity": {
-          "title": "Quantity",
-          "type": "string"
-        },
-        "complex_data": {
-          "title": "Complex Data",
-          "type": "boolean"
-        },
-        "vector": {
-          "title": "Vector",
-          "type": "boolean"
-        },
-        "units": {
-          "title": "Units",
-          "type": "string"
-        },
-        "coordinate_units": {
-          "title": "Coordinate Units",
-          "type": "string"
-        },
-        "coordinate_system": {
-          "title": "Coordinate System",
-          "type": "string"
-        },
-        "grid_type": {
-          "title": "Grid Type",
-          "type": "string"
-        },
-        "region_name": {
-          "title": "Region Name",
-          "type": "string"
-        },
         "assignment": {
           "items": {
             "type": "string"
@@ -146,12 +115,63 @@
           "title": "Assignment",
           "type": "array"
         },
-        "object_type": {
-          "title": "Object Type",
+        "axis_order": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Axis Order",
+          "type": "array"
+        },
+        "complex_data": {
+          "title": "Complex Data",
+          "type": "boolean"
+        },
+        "component_labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Component Labels",
+          "type": "array"
+        },
+        "coordinate_system": {
+          "title": "Coordinate System",
           "type": "string"
         },
-        "solution": {
-          "title": "Solution",
+        "coordinate_units": {
+          "title": "Coordinate Units",
+          "type": "string"
+        },
+        "excitation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excitation"
+        },
+        "flattening_order": {
+          "default": "C",
+          "title": "Flattening Order",
+          "type": "string"
+        },
+        "frequency_hz": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frequency Hz"
+        },
+        "grid_type": {
+          "title": "Grid Type",
           "type": "string"
         },
         "mode": {
@@ -166,17 +186,16 @@
           "default": null,
           "title": "Mode"
         },
-        "frequency_hz": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Frequency Hz"
+        "normalization": {
+          "$ref": "#/$defs/NormalizationKind"
+        },
+        "object_type": {
+          "title": "Object Type",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
         },
         "phase_deg": {
           "anyOf": [
@@ -190,8 +209,30 @@
           "default": null,
           "title": "Phase Deg"
         },
-        "normalization": {
-          "$ref": "#/$defs/NormalizationKind"
+        "phasor_convention": {
+          "$ref": "#/$defs/PhasorConvention",
+          "default": "unknown"
+        },
+        "point_count": {
+          "minimum": 1,
+          "title": "Point Count",
+          "type": "integer"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "raw_path": {
+          "title": "Raw Path",
+          "type": "string"
+        },
+        "region_name": {
+          "title": "Region Name",
+          "type": "string"
+        },
+        "representation": {
+          "$ref": "#/$defs/FieldRepresentation",
+          "default": "complex_phasor"
         },
         "shape": {
           "items": {
@@ -200,10 +241,29 @@
           "title": "Shape",
           "type": "array"
         },
-        "point_count": {
-          "minimum": 1,
-          "title": "Point Count",
-          "type": "integer"
+        "solution": {
+          "title": "Solution",
+          "type": "string"
+        },
+        "topology": {
+          "default": "unstructured",
+          "title": "Topology",
+          "type": "string"
+        },
+        "units": {
+          "title": "Units",
+          "type": "string"
+        },
+        "variation": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variation",
+          "type": "object"
+        },
+        "vector": {
+          "title": "Vector",
+          "type": "boolean"
         }
       },
       "required": [
@@ -227,19 +287,46 @@
       "title": "FieldRecord",
       "type": "object"
     },
+    "FieldRepresentation": {
+      "enum": [
+        "real_gauge",
+        "complex_phasor",
+        "phase_evaluated_real",
+        "quadrature_reconstructed",
+        "magnitude_only"
+      ],
+      "title": "FieldRepresentation",
+      "type": "string"
+    },
     "FileRecord": {
       "additionalProperties": false,
       "properties": {
+        "generated_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated By"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
         "path": {
           "title": "Path",
           "type": "string"
         },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
         "role": {
           "title": "Role",
-          "type": "string"
-        },
-        "media_type": {
-          "title": "Media Type",
           "type": "string"
         },
         "sha256": {
@@ -252,10 +339,6 @@
           "title": "Size Bytes",
           "type": "integer"
         },
-        "required": {
-          "title": "Required",
-          "type": "boolean"
-        },
         "source_path": {
           "anyOf": [
             {
@@ -267,18 +350,6 @@
           ],
           "default": null,
           "title": "Source Path"
-        },
-        "generated_by": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Generated By"
         }
       },
       "required": [
@@ -302,6 +373,18 @@
       "title": "NormalizationKind",
       "type": "string"
     },
+    "PhasorConvention": {
+      "enum": [
+        "exp_positive_iwt_peak",
+        "exp_negative_iwt_peak",
+        "exp_positive_iwt_rms",
+        "exp_negative_iwt_rms",
+        "not_applicable",
+        "unknown"
+      ],
+      "title": "PhasorConvention",
+      "type": "string"
+    },
     "Severity": {
       "enum": [
         "info",
@@ -323,8 +406,20 @@
     "TouchstoneRecord": {
       "additionalProperties": false,
       "properties": {
-        "path": {
-          "title": "Path",
+        "data_format": {
+          "title": "Data Format",
+          "type": "string"
+        },
+        "frequency_max_hz": {
+          "title": "Frequency Max Hz",
+          "type": "number"
+        },
+        "frequency_min_hz": {
+          "title": "Frequency Min Hz",
+          "type": "number"
+        },
+        "frequency_unit": {
+          "title": "Frequency Unit",
           "type": "string"
         },
         "number_of_ports": {
@@ -332,22 +427,41 @@
           "title": "Number Of Ports",
           "type": "integer"
         },
-        "frequency_unit": {
-          "title": "Frequency Unit",
-          "type": "string"
-        },
         "parameter_type": {
           "default": "S",
           "title": "Parameter Type",
           "type": "string"
         },
-        "data_format": {
-          "title": "Data Format",
+        "path": {
+          "title": "Path",
           "type": "string"
         },
-        "renormalized": {
-          "title": "Renormalized",
+        "point_count": {
+          "minimum": 1,
+          "title": "Point Count",
+          "type": "integer"
+        },
+        "port_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Port Names",
+          "type": "array"
+        },
+        "port_order_verified": {
+          "default": false,
+          "title": "Port Order Verified",
           "type": "boolean"
+        },
+        "reference_impedance_imag_ohm": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Reference Impedance Imag Ohm",
+          "type": "array"
         },
         "reference_impedance_ohm": {
           "anyOf": [
@@ -361,25 +475,92 @@
           "default": null,
           "title": "Reference Impedance Ohm"
         },
-        "port_names": {
+        "reference_impedance_real_ohm": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Reference Impedance Real Ohm",
+          "type": "array"
+        },
+        "renormalization_impedance_ohm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Renormalization Impedance Ohm"
+        },
+        "renormalized": {
+          "title": "Renormalized",
+          "type": "boolean"
+        },
+        "source_excitation_names": {
           "items": {
             "type": "string"
           },
-          "title": "Port Names",
+          "title": "Source Excitation Names",
           "type": "array"
         },
-        "frequency_min_hz": {
-          "title": "Frequency Min Hz",
-          "type": "number"
+        "source_impedance_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Impedance Path"
         },
-        "frequency_max_hz": {
-          "title": "Frequency Max Hz",
-          "type": "number"
+        "source_impedance_preserved": {
+          "default": true,
+          "title": "Source Impedance Preserved",
+          "type": "boolean"
         },
-        "point_count": {
-          "minimum": 1,
-          "title": "Point Count",
-          "type": "integer"
+        "source_reference_impedance_imag_ohm": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Source Reference Impedance Imag Ohm",
+          "type": "array"
+        },
+        "source_reference_impedance_real_ohm": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Source Reference Impedance Real Ohm",
+          "type": "array"
+        },
+        "touchstone_version": {
+          "default": "1.0",
+          "title": "Touchstone Version",
+          "type": "string"
+        },
+        "wave_definition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wave Definition"
         }
       },
       "required": [
@@ -399,9 +580,29 @@
     "VariationValue": {
       "additionalProperties": false,
       "properties": {
-        "expression": {
-          "title": "Expression",
-          "type": "string"
+        "declared_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Declared Unit"
+        },
+        "evaluated_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluated Unit"
         },
         "evaluated_value": {
           "anyOf": [
@@ -415,7 +616,7 @@
           "default": null,
           "title": "Evaluated Value"
         },
-        "evaluated_unit": {
+        "evaluated_value_basis": {
           "anyOf": [
             {
               "type": "string"
@@ -425,7 +626,11 @@
             }
           ],
           "default": null,
-          "title": "Evaluated Unit"
+          "title": "Evaluated Value Basis"
+        },
+        "expression": {
+          "title": "Expression",
+          "type": "string"
         }
       },
       "required": [
@@ -437,31 +642,86 @@
   },
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "default": "0.1.0",
-      "title": "Schema Version",
-      "type": "string"
-    },
-    "exporter_version": {
-      "title": "Exporter Version",
+    "aedt_version": {
+      "title": "Aedt Version",
       "type": "string"
     },
     "bundle_status": {
       "$ref": "#/$defs/ExportStatus"
     },
-    "run_id": {
-      "pattern": "^[0-9a-f]{8}$",
-      "title": "Run Id",
+    "design_name": {
+      "title": "Design Name",
       "type": "string"
+    },
+    "design_type": {
+      "title": "Design Type",
+      "type": "string"
+    },
+    "design_variables": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VariationValue"
+      },
+      "title": "Design Variables",
+      "type": "object"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "eigenmode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EigenmodeRecord"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_profile": {
+      "$ref": "#/$defs/EvidenceProfile",
+      "default": "standard"
     },
     "export_timestamp_utc": {
       "format": "date-time",
       "title": "Export Timestamp Utc",
       "type": "string"
     },
-    "project_name": {
-      "title": "Project Name",
+    "exporter_version": {
+      "title": "Exporter Version",
       "type": "string"
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/FieldRecord"
+      },
+      "title": "Fields",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileRecord"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "model_units": {
+      "title": "Model Units",
+      "type": "string"
+    },
+    "operating_system": {
+      "title": "Operating System",
+      "type": "string"
+    },
+    "ports": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Ports",
+      "type": "array"
     },
     "project_file_name": {
       "title": "Project File Name",
@@ -478,20 +738,56 @@
       ],
       "title": "Project File Sha256"
     },
-    "design_name": {
-      "title": "Design Name",
+    "project_name": {
+      "title": "Project Name",
       "type": "string"
     },
-    "design_type": {
-      "title": "Design Type",
+    "project_variables": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VariationValue"
+      },
+      "title": "Project Variables",
+      "type": "object"
+    },
+    "pyaedt_version": {
+      "title": "Pyaedt Version",
+      "type": "string"
+    },
+    "python_version": {
+      "title": "Python Version",
+      "type": "string"
+    },
+    "reference_coordinate_system": {
+      "title": "Reference Coordinate System",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^(?:[0-9a-f]{8}|[0-9a-f]{32})$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "0.1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "setup_name": {
+      "title": "Setup Name",
       "type": "string"
     },
     "solution_kind": {
       "$ref": "#/$defs/SolutionKind"
     },
-    "setup_name": {
-      "title": "Setup Name",
+    "solution_reference": {
+      "title": "Solution Reference",
       "type": "string"
+    },
+    "solved_variation": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VariationValue"
+      },
+      "title": "Solved Variation",
+      "type": "object"
     },
     "sweep_name": {
       "anyOf": [
@@ -504,52 +800,6 @@
       ],
       "title": "Sweep Name"
     },
-    "solution_reference": {
-      "title": "Solution Reference",
-      "type": "string"
-    },
-    "variation_id": {
-      "title": "Variation Id",
-      "type": "string"
-    },
-    "variation": {
-      "additionalProperties": {
-        "$ref": "#/$defs/VariationValue"
-      },
-      "title": "Variation",
-      "type": "object"
-    },
-    "aedt_version": {
-      "title": "Aedt Version",
-      "type": "string"
-    },
-    "pyaedt_version": {
-      "title": "Pyaedt Version",
-      "type": "string"
-    },
-    "python_version": {
-      "title": "Python Version",
-      "type": "string"
-    },
-    "operating_system": {
-      "title": "Operating System",
-      "type": "string"
-    },
-    "model_units": {
-      "title": "Model Units",
-      "type": "string"
-    },
-    "reference_coordinate_system": {
-      "title": "Reference Coordinate System",
-      "type": "string"
-    },
-    "ports": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Ports",
-      "type": "array"
-    },
     "touchstone": {
       "anyOf": [
         {
@@ -560,36 +810,16 @@
         }
       ]
     },
-    "eigenmode": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/EigenmodeRecord"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "fields": {
-      "items": {
-        "$ref": "#/$defs/FieldRecord"
+    "variation": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VariationValue"
       },
-      "title": "Fields",
-      "type": "array"
+      "title": "Variation",
+      "type": "object"
     },
-    "files": {
-      "items": {
-        "$ref": "#/$defs/FileRecord"
-      },
-      "title": "Files",
-      "type": "array"
-    },
-    "diagnostics": {
-      "items": {
-        "$ref": "#/$defs/Diagnostic"
-      },
-      "title": "Diagnostics",
-      "type": "array"
+    "variation_id": {
+      "title": "Variation Id",
+      "type": "string"
     }
   },
   "required": [

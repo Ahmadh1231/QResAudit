@@ -4,8 +4,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from qresaudit.models.common import (
     Diagnostic,
+    EvidenceProfile,
     ExportStatus,
+    FieldRepresentation,
     NormalizationKind,
+    PhasorConvention,
     SolutionKind,
 )
 
@@ -34,6 +37,8 @@ class VariationValue(StrictModel):
     expression: str
     evaluated_value: float | None = None
     evaluated_unit: str | None = None
+    declared_unit: str | None = None
+    evaluated_value_basis: str | None = None
 
 
 class TouchstoneRecord(StrictModel):
@@ -44,7 +49,18 @@ class TouchstoneRecord(StrictModel):
     data_format: str
     renormalized: bool
     reference_impedance_ohm: float | None = None
+    reference_impedance_real_ohm: list[list[float]] = Field(default_factory=list)
+    reference_impedance_imag_ohm: list[list[float]] = Field(default_factory=list)
+    renormalization_impedance_ohm: float | None = None
+    source_impedance_preserved: bool = True
+    source_impedance_path: str | None = None
+    source_reference_impedance_real_ohm: list[list[float]] = Field(default_factory=list)
+    source_reference_impedance_imag_ohm: list[list[float]] = Field(default_factory=list)
+    touchstone_version: str = "1.0"
+    wave_definition: str | None = None
     port_names: list[str]
+    source_excitation_names: list[str] = Field(default_factory=list)
+    port_order_verified: bool = False
     frequency_min_hz: float
     frequency_max_hz: float
     point_count: int = Field(ge=1)
@@ -77,13 +93,21 @@ class FieldRecord(StrictModel):
     normalization: NormalizationKind
     shape: list[int]
     point_count: int = Field(ge=1)
+    excitation: str | None = None
+    representation: FieldRepresentation = FieldRepresentation.COMPLEX_PHASOR
+    phasor_convention: PhasorConvention = PhasorConvention.UNKNOWN
+    component_labels: list[str] = Field(default_factory=list)
+    axis_order: list[str] = Field(default_factory=lambda: ["x", "y", "z"])
+    flattening_order: str = "C"
+    topology: str = "unstructured"
+    variation: dict[str, str] = Field(default_factory=dict)
 
 
 class HFSSRunManifest(StrictModel):
-    schema_version: str = "0.1.0"
+    schema_version: str = "0.1.1"
     exporter_version: str
     bundle_status: ExportStatus
-    run_id: str = Field(pattern=r"^[0-9a-f]{8}$")
+    run_id: str = Field(pattern=r"^(?:[0-9a-f]{8}|[0-9a-f]{32})$")
     export_timestamp_utc: datetime
     project_name: str
     project_file_name: str
@@ -96,6 +120,10 @@ class HFSSRunManifest(StrictModel):
     solution_reference: str
     variation_id: str
     variation: dict[str, VariationValue]
+    project_variables: dict[str, VariationValue] = Field(default_factory=dict)
+    design_variables: dict[str, VariationValue] = Field(default_factory=dict)
+    solved_variation: dict[str, VariationValue] = Field(default_factory=dict)
+    evidence_profile: EvidenceProfile = EvidenceProfile.STANDARD
     aedt_version: str
     pyaedt_version: str
     python_version: str

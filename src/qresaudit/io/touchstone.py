@@ -40,7 +40,17 @@ def write_s_parameter_csv(network: rf.Network, path: Path) -> Path:
 
 def network_metadata(network: rf.Network, path: str, port_names: list[str]) -> dict[str, object]:
     z0 = np.asarray(network.z0)
-    reference = float(np.real(z0.flat[0])) if z0.size else None
+    parsed_names = getattr(network, "port_names", None)
+    if isinstance(parsed_names, list) and len(parsed_names) == network.nports:
+        port_order_verified = True
+        names = [str(value) for value in parsed_names]
+    else:
+        port_order_verified = False
+        names = (
+            port_names
+            if len(port_names) == network.nports
+            else [f"port_{index + 1}" for index in range(network.nports)]
+        )
     return {
         "path": path,
         "number_of_ports": network.nports,
@@ -48,8 +58,19 @@ def network_metadata(network: rf.Network, path: str, port_names: list[str]) -> d
         "parameter_type": "S",
         "data_format": "RI",
         "renormalized": False,
-        "reference_impedance_ohm": reference,
-        "port_names": port_names,
+        "reference_impedance_ohm": None,
+        "reference_impedance_real_ohm": np.real(z0).tolist(),
+        "reference_impedance_imag_ohm": np.imag(z0).tolist(),
+        "renormalization_impedance_ohm": None,
+        "source_impedance_preserved": True,
+        "source_impedance_path": None,
+        "source_reference_impedance_real_ohm": [],
+        "source_reference_impedance_imag_ohm": [],
+        "touchstone_version": "1.0",
+        "wave_definition": None,
+        "port_names": names,
+        "source_excitation_names": port_names,
+        "port_order_verified": port_order_verified,
         "frequency_min_hz": float(network.f[0]),
         "frequency_max_hz": float(network.f[-1]),
         "point_count": len(network.f),

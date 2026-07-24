@@ -5,28 +5,29 @@ from typing import Any
 
 from qresaudit.hashing import sha256_file
 from qresaudit.models.manifest import VariationValue
-from qresaudit.units import convert_to_si
+from qresaudit.units import canonical_si_unit, parse_quantity
 
 
 def evaluated_variables(values: dict[str, str]) -> dict[str, VariationValue]:
     result: dict[str, VariationValue] = {}
     for name, expression in values.items():
         try:
-            evaluated = convert_to_si(expression)
-            unit = "m" if expression.strip().endswith(("m", "um", "nm", "mm", "cm")) else None
+            evaluated, declared_unit = parse_quantity(expression)
+            unit = canonical_si_unit(declared_unit)
         except ValueError:
-            evaluated, unit = None, None
+            evaluated, unit, declared_unit = None, None, None
         result[name] = VariationValue(
-            expression=expression, evaluated_value=evaluated, evaluated_unit=unit
+            expression=expression,
+            evaluated_value=evaluated,
+            evaluated_unit=unit,
+            declared_unit=declared_unit,
+            evaluated_value_basis="SI" if evaluated is not None else None,
         )
     return result
 
 
-def project_hash(path: Path) -> str | None:
-    try:
-        return sha256_file(path)
-    except OSError:
-        return None
+def project_hash(path: Path) -> str:
+    return sha256_file(path)
 
 
 def runtime_provenance(app: Any) -> dict[str, str]:

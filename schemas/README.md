@@ -1,4 +1,4 @@
-# Generated schemas
+# QResAudit schemas
 
-`manifest-0.1.schema.json` and `export-config-0.1.schema.json` are generated from the
-Pydantic models and included in release wheels.
+Version `0.1.1` is the stabilization schema. Phase 2 schema work is deferred
+until the public and licensed release gates are satisfied.

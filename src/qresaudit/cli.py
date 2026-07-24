@@ -6,12 +6,26 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from qresaudit import __version__
 from qresaudit.models.config import ExportConfig
 from qresaudit.models.manifest import HFSSRunManifest
 from qresaudit.validation.engine import ValidationResult, validate_bundle
 
-app = typer.Typer(no_args_is_help=True, help="Inspect and validate portable HFSS result bundles.")
+app = typer.Typer(
+    no_args_is_help=True,
+    invoke_without_command=True,
+    help="Inspect and validate portable HFSS result bundles.",
+)
 console = Console()
+
+
+@app.callback()
+def main(
+    version: Annotated[bool, typer.Option("--version", help="Show the package version.")] = False,
+) -> None:
+    if version:
+        typer.echo(__version__)
+        raise typer.Exit()
 
 
 def _render(result: ValidationResult, json_output: bool) -> None:

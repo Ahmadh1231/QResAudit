@@ -24,14 +24,14 @@ def export_field(
         reference_coordinate_system=field.reference_coordinate_system,
         export_in_si_system=field.export_in_si_system,
         export_field_in_reference=field.export_field_in_reference,
-        grid_type=None if field.grid.sample_points_file else field.grid.type,
+        grid_type=None if field.grid.sample_points_file else field.grid.type.value,
         grid_center=field.grid.center,
         grid_start=field.grid.start,
         grid_stop=field.grid.stop,
         grid_step=field.grid.step,
         is_vector=field.vector,
         assignment=field.assignment,
-        objects_type=field.object_type,
+        objects_type=field.object_type.value,
     )
     if not result:
         raise ExportError("EXPORT_FIELD_FAILED")

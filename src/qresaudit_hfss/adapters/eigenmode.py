@@ -6,10 +6,17 @@ import pandas as pd
 
 from qresaudit.io.field_tab import parse_field_tab
 from qresaudit.io.fields_hdf5 import source_metadata, write_field_hdf5
-from qresaudit.models.common import Diagnostic, NormalizationKind
+from qresaudit.models.common import Diagnostic, FieldRepresentation, NormalizationKind, error
 from qresaudit.models.manifest import EigenmodeRecord, FieldRecord, FileRecord, TouchstoneRecord
+from qresaudit.units import canonical_variation, unit_factor
 from qresaudit_hfss.adapters.common import evidence_records, file_record
+from qresaudit_hfss.adapters.driven import _evidence_capability_diagnostics
 from qresaudit_hfss.exports.fields import export_field
+from qresaudit_hfss.inspect import (
+    field_grid_axes,
+    field_grid_shape,
+    field_source_coordinate_units,
+)
 
 
 class EigenmodeAdapter:
@@ -19,7 +26,10 @@ class EigenmodeAdapter:
         self.mode_frequencies: dict[int, float] = {}
 
     def preflight(self) -> list[Diagnostic]:
-        return []
+        diagnostics = _evidence_capability_diagnostics(self.config, self.capabilities)
+        if self.config.fields and not self.capabilities.has_fields_calculator_export:
+            diagnostics.append(error("HFSS_CAPABILITY_FIELD_EXPORT_MISSING", "fields_calculator"))
+        return diagnostics
 
     def _mode_data(self) -> pd.DataFrame:
         expressions = ["Eigenmode(Real)", "Eigenmode(Imag)", "Q"]
@@ -32,15 +42,23 @@ class EigenmodeAdapter:
         if not data:
             raise ValueError("EXPORT_EIGENMODE_DATA_FAILED")
         modes = np.asarray(data.primary_sweep_values, dtype=int)
-        real = np.asarray(data.data_real(expressions[0]), dtype=float) * 1e9
+        units_data = getattr(data, "units_data", {})
+        frequency_unit = units_data.get(expressions[0]) if isinstance(units_data, dict) else None
+        if not frequency_unit:
+            raise ValueError("EXPORT_EIGENMODE_FREQUENCY_UNIT_MISSING")
+        frequency_scale = unit_factor(str(frequency_unit))
+        real = np.asarray(data.data_real(expressions[0]), dtype=float) * frequency_scale
         try:
-            imag = np.asarray(data.data_real(expressions[1]), dtype=float) * 1e9
+            imag_values = np.asarray(data.data_real(expressions[1]), dtype=float)
+            imag: list[float | None] = [float(value * frequency_scale) for value in imag_values]
         except Exception:
-            imag = np.zeros_like(real)
+            imag = [None] * len(real)
         try:
-            q_values = np.asarray(data.data_real(expressions[2]), dtype=float)
+            q_values: list[float | None] = [
+                float(value) for value in np.asarray(data.data_real(expressions[2]), dtype=float)
+            ]
         except Exception:
-            q_values = np.zeros_like(real)
+            q_values = [None] * len(real)
         self.mode_frequencies = {
             int(mode): float(frequency) for mode, frequency in zip(modes, real, strict=True)
         }
@@ -51,7 +69,7 @@ class EigenmodeAdapter:
                 "frequency_imag_hz": imag,
                 "q_hfss_unloaded": q_values,
                 "source_solution": self.solution_reference,
-                "variation_id": "nominal",
+                "variation_id": canonical_variation(self.config.solution.variation) or "nominal",
             }
         )
 
@@ -90,10 +108,15 @@ class EigenmodeAdapter:
                     raw,
                     {"Mode": str(mode), "Phase": f"{field.phase_deg or 0}deg"},
                 )
-                unit = "A/m" if field.quantity == "H" else "V/m"
-                parsed = parse_field_tab(exported, quantity=field.quantity, value_units=unit)
-                if not parsed.is_complex:
-                    raise ValueError("EXPORT_COMPLEX_FIELD_UNAVAILABLE")
+                parsed = parse_field_tab(
+                    exported,
+                    quantity=field.quantity,
+                    value_units=field.value_units,
+                    coordinate_units=field_source_coordinate_units(
+                        field,
+                        str(self.app.modeler.model_units),
+                    ),
+                )
                 h5 = (
                     staging
                     / "fields"
@@ -102,14 +125,26 @@ class EigenmodeAdapter:
                 )
                 normalization = NormalizationKind.HFSS_EIGENMODE_PEAK_1
                 metadata = {
-                    "grid_type": field.grid.type,
-                    "grid_shape": [len(parsed.coordinates_m)],
+                    "grid_type": field.grid.type.value,
+                    "topology": "unstructured"
+                    if field.grid.sample_points_file is not None
+                    else "structured",
+                    "shape": field_grid_shape(field) or [len(parsed.coordinates_m)],
+                    "axes": field_grid_axes(field),
+                    "axis_order": ["x", "y", "z"],
+                    "flattening_order": "C",
                     "coordinate_system": field.reference_coordinate_system,
                     "solution_reference": self.solution_reference,
                     "setup_name": self.config.solution.setup,
                     "mode": mode,
                     "frequency_hz": frequency,
                     "phase_deg": field.phase_deg,
+                    "representation": (
+                        field.representation.value
+                        if field.representation is not None
+                        else ("complex_phasor" if parsed.is_complex else "real_gauge")
+                    ),
+                    "phasor_convention": field.phasor_convention.value,
                     "normalization": normalization.value,
                     "region_name": field.name,
                     "assignments_json": field.assignment,
@@ -133,22 +168,38 @@ class EigenmodeAdapter:
                         path=h5.relative_to(staging).as_posix(),
                         raw_path=exported.relative_to(staging).as_posix(),
                         quantity=field.quantity,
-                        complex_data=True,
+                        complex_data=parsed.is_complex,
                         vector=parsed.is_vector,
                         units=parsed.value_units,
                         coordinate_units="m",
                         coordinate_system=field.reference_coordinate_system,
-                        grid_type=field.grid.type,
+                        grid_type=field.grid.type.value,
                         region_name=field.name,
                         assignment=field.assignment,
-                        object_type=field.object_type,
+                        object_type=field.object_type.value,
                         solution=self.solution_reference,
                         mode=mode,
                         frequency_hz=frequency,
                         phase_deg=field.phase_deg,
                         normalization=normalization,
-                        shape=list(parsed.values.shape),
+                        shape=[
+                            *(metadata["shape"]),
+                            *([3] if parsed.is_vector else []),
+                        ],
                         point_count=len(parsed.coordinates_m),
+                        representation=(
+                            field.representation
+                            if field.representation is not None
+                            else (
+                                FieldRepresentation.COMPLEX_PHASOR
+                                if parsed.is_complex
+                                else FieldRepresentation.REAL_GAUGE
+                            )
+                        ),
+                        phasor_convention=field.phasor_convention,
+                        component_labels=["x", "y", "z"] if parsed.is_vector else ["scalar"],
+                        topology=metadata["topology"],
+                        variation=self.config.solution.variation,
                     )
                 )
         return files, fields
