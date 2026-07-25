@@ -36,14 +36,19 @@ def cartesian_volume_element(
 
 def cylindrical_volume_element(r: np.ndarray, dr: float, dphi: float, dz: float) -> np.ndarray:
     """dV = r * dr * dphi * dz for cylindrical grid."""
-    return np.abs(r) * dr * dphi * dz  # type: ignore[no-any-return]
+    result: np.ndarray = np.asarray(np.abs(r) * dr * dphi * dz, dtype=float)
+    return result
 
 
 def spherical_volume_element(r: np.ndarray, dr: float, dtheta: float, dphi: float) -> np.ndarray:
     """dV = r² * sin(theta) * dr * dtheta * dphi for spherical grid."""
     theta = np.linspace(0, np.pi, r.shape[1]) if r.ndim > 1 else np.array([np.pi / 2])
     sin_theta = np.sin(theta)
-    return (r**2)[:, np.newaxis] * sin_theta[np.newaxis, :] * dr * dtheta * dphi  # type: ignore[no-any-return]
+    result: np.ndarray = np.asarray(
+        (r**2)[:, np.newaxis] * sin_theta[np.newaxis, :] * dr * dtheta * dphi,
+        dtype=float,
+    )
+    return result
 
 
 def compute_energy(

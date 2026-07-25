@@ -7,7 +7,6 @@ Commands:
 
 import ast
 from dataclasses import dataclass
-from typing import cast
 
 import numpy as np
 
@@ -141,8 +140,11 @@ class GaussianProcessSurrogate:
 
     def _kernel(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         distance = a[:, None, :] - b[None, :, :]
-        value = np.exp(-0.5 * np.sum(distance * distance, axis=2) / self.length_scale**2)
-        return cast(np.ndarray, value)
+        value: np.ndarray = np.asarray(
+            np.exp(-0.5 * np.sum(distance * distance, axis=2) / self.length_scale**2),
+            dtype=float,
+        )
+        return value
 
     def predict(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         if self._x is None or self._alpha is None or self._chol is None:

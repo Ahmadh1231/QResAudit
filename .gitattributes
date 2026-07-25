@@ -1,0 +1,12 @@
+# Evidence fixture checksums are over CRLF-exported bytes on every platform.
+testdata/**/*.csv text eol=crlf
+testdata/**/*.fld text eol=crlf
+testdata/**/*.json text eol=crlf
+testdata/**/*.prof text eol=crlf
+testdata/**/*.s1p text eol=crlf
+testdata/**/*.s2p text eol=crlf
+testdata/**/*.sha256 text eol=crlf
+testdata/**/*.txt text eol=crlf
+testdata/**/*.yaml text eol=crlf
+testdata/**/*.yml text eol=crlf
+testdata/**/*.h5 binary
