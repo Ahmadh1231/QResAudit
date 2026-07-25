@@ -25,6 +25,13 @@ jobs:
       - run: ruff check .
       - run: mypy src
       - run: python tools/check_schemas.py
+      - name: Diagnostic imports
+        shell: bash
+        run: |
+          python -c "import qresaudit; print('core OK:', qresaudit.__version__)"
+          python -c "import qresaudit.analysis; print('analysis OK')"
+          python -c "from qresaudit.validation import validate_bundle; print('validation OK')"
+          python -c "from qresaudit.models.v0_2 import ModeOverlapResult; print('ModeOverlapResult OK')"
       - run: >-
           pytest tests/unit tests/offline_integration -vv -ra --tb=long
           --junitxml=junit.xml
