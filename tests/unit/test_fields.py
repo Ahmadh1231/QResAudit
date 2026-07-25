@@ -5,7 +5,12 @@ import pytest
 
 from qresaudit.exceptions import FieldGridOrderingError
 from qresaudit.io.field_tab import parse_field_tab
-from qresaudit.io.fields_hdf5 import read_field_hdf5, source_metadata, write_field_hdf5
+from qresaudit.io.fields_hdf5 import (
+    _decode_attribute,
+    read_field_hdf5,
+    source_metadata,
+    write_field_hdf5,
+)
 
 
 def test_complex_vector_field_round_trip(tmp_path: Path) -> None:
@@ -150,8 +155,10 @@ def test_structured_dataset_axis_metadata(tmp_path: Path) -> None:
     )
 
     with h5py.File(target, "r") as h5:
-        assert h5["field/real"].attrs["dataset_axis_order"] == ('["x", "y", "z", "component"]')
-        assert h5["field/magnitude"].attrs["dataset_axis_order"] == '["x", "y", "z"]'
+        real_axes = _decode_attribute(h5["field/real"].attrs["dataset_axis_order"])
+        mag_axes = _decode_attribute(h5["field/magnitude"].attrs["dataset_axis_order"])
+        assert real_axes == ["x", "y", "z", "component"]
+        assert mag_axes == ["x", "y", "z"]
 
 
 def test_structured_reader_rejects_tampered_coordinate_order(tmp_path: Path) -> None:
@@ -185,6 +192,25 @@ def test_structured_reader_rejects_tampered_coordinate_order(tmp_path: Path) -> 
 
     with pytest.raises(FieldGridOrderingError, match="stored coordinates"):
         read_field_hdf5(target)
+
+
+def test_decode_attribute_handles_all_hdf5_string_types(tmp_path: Path) -> None:
+    """Regression: _decode_attribute must handle str, bytes, and np.bytes_ from h5py."""
+    import h5py
+    import numpy as np
+
+    value = '["x", "y", "z"]'
+    target = tmp_path / "attr_types.h5"
+    with h5py.File(target, "w") as h5:
+        h5.attrs["as_str"] = value
+        h5.attrs["as_bytes"] = np.bytes_(value)
+        dt = h5py.string_dtype("ascii", length=len(value))
+        h5.attrs.create("as_fixed_ascii", value, dtype=dt)
+
+    with h5py.File(target, "r") as h5:
+        assert _decode_attribute(h5.attrs["as_str"]) == ["x", "y", "z"]
+        assert _decode_attribute(h5.attrs["as_bytes"]) == ["x", "y", "z"]
+        assert _decode_attribute(h5.attrs["as_fixed_ascii"]) == ["x", "y", "z"]
 
 
 def _write_vector_field(path: Path, coordinates: np.ndarray, values: np.ndarray) -> Path:

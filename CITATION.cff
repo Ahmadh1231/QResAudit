@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: QResAudit
+message: >-
+  If you use QResAudit in your research, please cite it using the metadata below.
+type: software
+authors:
+  - given-names: Ahmadh
+    family-names: Hassan
+repository-code: 'https://github.com/Ahmadh1231/qresaudit'
+abstract: >-
+  QResAudit converts proprietary Ansys HFSS electromagnetic simulation outputs
+  into portable, machine-readable, cryptographically verifiable evidence bundles,
+  and provides offline scientific analysis and audit without requiring an Ansys license.
+keywords:
+  - hfss
+  - electromagnetic-simulation
+  - resonator
+  - quantum-devices
+  - reproducibility
+  - scientific-software
+  - microwave
+license: MIT
+version: 0.2.0
+date-released: '2026-07-25'

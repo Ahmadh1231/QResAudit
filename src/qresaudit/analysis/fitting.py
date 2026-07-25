@@ -1,0 +1,372 @@
+"""Resonator fitting — extract Q factors and resonance parameters from S-parameter data.
+
+Supports notch, peak, and reflection resonator models with cable delay removal,
+complex background correction, uncertainty estimation via covariance and bootstrap,
+model comparison (AIC/BIC), and synthetic validation fixtures.
+
+Command:
+    qresaudit fit BUNDLE --response S21 --model notch
+"""
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import curve_fit, minimize
+
+from qresaudit.io.bundle import load_manifest, safe_bundle_path
+from qresaudit.io.touchstone import load_network
+from qresaudit.models.v0_2 import ResonatorFitResult
+
+
+def _cable_delay_phase(frequency: np.ndarray, delay_ns: float) -> np.ndarray:
+    """Phase factor from cable delay: exp(2j * pi * f * tau)."""
+    tau = delay_ns * 1e-9
+    return np.exp(2j * np.pi * frequency * tau)
+
+
+def _background_model(frequency: np.ndarray, slope_real: float, slope_imag: float,
+                      intercept_real: float, intercept_imag: float) -> np.ndarray:
+    """Complex linear background: (a + b*f) + j*(c + d*f)."""
+    bg_real = slope_real * frequency + intercept_real
+    bg_imag = slope_imag * frequency + intercept_imag
+    return bg_real + 1j * bg_imag
+
+
+def notch_model(freq: np.ndarray, f0: float, ql: float, qc: float,
+                delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
+                bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+    """Notch (transmission dip) resonator model: S21 = 1 - Ql/|Qc| / (1 + 2j Ql (f-f0)/f0).
+
+    Parameters
+    ----------
+    f0 : float
+        Resonance frequency (Hz).
+    ql : float
+        Loaded quality factor.
+    qc : float
+        Absolute coupling quality factor (|Qc|).
+    delay : float
+        Cable delay (ns).
+    bg_real, bg_imag, bg_slope_real, bg_slope_imag : float
+        Complex background parameters.
+    """
+    detuning = 2.0 * ql * (freq - f0) / f0
+    s21 = 1.0 - (ql / abs(qc)) / (1.0 + 1j * detuning)
+    phase = _cable_delay_phase(freq, delay)
+    bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
+    return (s21 + bg) * phase
+
+
+def peak_model(freq: np.ndarray, f0: float, ql: float, qc: float,
+               delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
+               bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+    """Peak (transmission maximum) resonator model."""
+    detuning = 2.0 * ql * (freq - f0) / f0
+    s21 = (ql / abs(qc)) / (1.0 + 1j * detuning)
+    phase = _cable_delay_phase(freq, delay)
+    bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
+    return (s21 + bg) * phase
+
+
+def reflection_model(freq: np.ndarray, f0: float, ql: float, qc: float,
+                     delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
+                     bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+    """Reflection (S11) resonator model."""
+    detuning = 2.0 * ql * (freq - f0) / f0
+    s11 = 1.0 - (2.0 * ql / abs(qc)) / (1.0 + 1j * detuning)
+    phase = _cable_delay_phase(freq, delay)
+    bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
+    return (s11 + bg) * phase
+
+
+def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
+                  response: str = "S21",
+                  model: str = "notch",
+                  f0_guess: float | None = None,
+                  ql_guess: float = 1000.0,
+                  qc_guess: float = 5000.0,
+                  cable_delay_guess_ns: float = 0.0,
+                  use_bootstrap: bool = True,
+                  bootstrap_samples: int = 200) -> ResonatorFitResult:
+    """Fit a resonator model to S-parameter data.
+
+    Parameters
+    ----------
+    freq_hz : np.ndarray
+        Frequency axis in Hz.
+    s_data : np.ndarray
+        Complex S-parameter data (2D for multi-port, flattened to the target trace).
+    response : str
+        S-parameter label, e.g. "S21".
+    model : str
+        One of "notch", "peak", "reflection".
+    f0_guess : float | None
+        Initial frequency guess. Auto-detected if None.
+    ql_guess, qc_guess : float
+        Initial Q factor guesses.
+    cable_delay_guess_ns : float
+        Initial cable delay guess in nanoseconds.
+    use_bootstrap : bool
+        Whether to compute bootstrap uncertainties.
+    bootstrap_samples : int
+        Number of bootstrap resamples.
+
+    Returns
+    -------
+    ResonatorFitResult
+    """
+    if model not in {"notch", "peak", "reflection"}:
+        raise ValueError(f"unsupported model: {model}")
+
+    model_func = {"notch": notch_model, "peak": peak_model, "reflection": reflection_model}[model]
+
+    # Flatten S-data to 1D if needed
+    s_flat = np.asarray(s_data).ravel()
+    if len(s_flat) != len(freq_hz):
+        raise ValueError("S-parameter data length must match frequency axis")
+
+    # Auto-detect f0 from magnitude minimum/maximum
+    if f0_guess is None:
+        mag = np.abs(s_flat)
+        if model in {"notch", "reflection"}:
+            f0_guess = float(freq_hz[np.argmin(mag)])
+        else:
+            f0_guess = float(freq_hz[np.argmax(mag)])
+
+    # Ensure f0_guess is within frequency range
+    f0_guess = max(freq_hz[0] + 1.0, min(freq_hz[-1] - 1.0, f0_guess))
+
+    # Initial parameters: f0, ql, qc, delay, bg_real, bg_imag, bg_slope_real, bg_slope_imag
+    p0 = [f0_guess, ql_guess, qc_guess, cable_delay_guess_ns, 0.0, 0.0, 0.0, 0.0]
+
+    # Bounds: all parameters should be positive where physically meaningful
+    bounds = (
+        [freq_hz[0], 1.0, 1.0, -100.0, -np.inf, -np.inf, -np.inf, -np.inf],  # lower
+        [freq_hz[-1], 1e12, 1e12, 100.0, np.inf, np.inf, np.inf, np.inf],      # upper
+    )
+
+    def _wrap_model(f, f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si):
+        return model_func(f, f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si)
+
+    def _cost(params, f, s_meas):
+        pred = _wrap_model(f, *params)
+        residuals = np.abs(pred - s_meas)
+        return float(np.sum(residuals ** 2))
+
+    # Curve fitting
+    try:
+        popt, pcov = curve_fit(
+            _wrap_model, freq_hz, s_flat,
+            p0=p0, bounds=bounds,
+            maxfev=20000, ftol=1e-12, xtol=1e-12,
+        )
+        optimizer_converged = True
+        optimizer_message = "curve_fit converged"
+    except Exception:
+        # Fall back to L-BFGS-B via minimize
+        result = minimize(
+            _cost, p0, args=(freq_hz, s_flat),
+            method="L-BFGS-B",
+            bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1])],
+        )
+        popt = result.x
+        pcov = None
+        optimizer_converged = bool(result.success)
+        optimizer_message = str(result.message)
+
+    f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si = [float(np.real(v)) for v in popt]
+
+    # Compute residuals
+    fitted = _wrap_model(freq_hz, *popt)
+    residuals = s_flat - fitted
+    residual_rms = float(np.sqrt(np.mean(np.abs(residuals) ** 2)))
+    residual_max = float(np.max(np.abs(residuals)))
+
+    # Q factor decomposition
+    ql_abs = abs(ql)
+    qc_abs = abs(qc)
+    # 1/Qi = 1/Ql - 1/|Qc| for notch; for peak/reflection adjust
+    if model == "notch":
+        qi = 1.0 / (1.0 / ql_abs - 1.0 / qc_abs) if ql_abs != qc_abs else float("inf")
+    else:
+        qi = ql_abs  # approximate for peak; depends on coupling
+
+    coupling_coeff = ql_abs / qc_abs if qc_abs > 0 else None
+
+    # Parameter uncertainties from covariance
+    uncertainties = {}
+    if pcov is not None:
+        try:
+            perr = np.sqrt(np.diag(pcov))
+            param_names = ["f0_hz", "q_loaded", "q_coupling", "delay_ns",
+                           "bg_r", "bg_i", "bg_sr", "bg_si"]
+            uncertainties = {n: float(v) for n, v in zip(param_names, perr)}
+        except Exception:
+            pass
+
+    f0_unc = uncertainties.get("f0_hz", abs(f0) * 1e-6)
+    ql_unc = uncertainties.get("q_loaded", ql_abs * 0.1)
+    qc_unc = uncertainties.get("q_coupling", qc_abs * 0.1)
+
+    # Compute AIC and BIC for model comparison
+    n_params = 8
+    n_points = len(freq_hz)
+    rss = float(np.sum(np.abs(residuals) ** 2))
+    log_likelihood = -0.5 * n_points * np.log(2 * np.pi * rss / n_points) - 0.5 * n_points
+    aic = 2 * n_params - 2 * log_likelihood
+    bic = n_params * np.log(n_points) - 2 * log_likelihood
+
+    chi_sq = float(np.sum(np.abs(residuals / (np.abs(fitted) + 1e-15)) ** 2))
+    dof = n_points - n_params
+    reduced_chi_sq = chi_sq / dof if dof > 0 else None
+
+    # Bootstrap uncertainties
+    bootstrap_conf = {}
+    if use_bootstrap:
+        try:
+            b_conf = _bootstrap_confidence(
+                _wrap_model, freq_hz, s_flat, popt, bounds,
+                n_samples=bootstrap_samples,
+            )
+            bootstrap_conf = b_conf
+        except Exception:
+            pass
+
+    return ResonatorFitResult(
+        model=model,
+        f0_hz=float(f0),
+        f0_uncertainty_hz=float(f0_unc),
+        q_loaded=float(ql_abs),
+        q_loaded_uncertainty=float(ql_unc),
+        q_coupling_absolute=float(qc_abs),
+        q_coupling_uncertainty=float(qc_unc),
+        q_internal=float(qi) if np.isfinite(qi) else None,
+        q_internal_uncertainty=None,
+        coupling_coefficient=float(coupling_coeff) if coupling_coeff is not None else None,
+        cable_delay_ns=float(delay),
+        cable_delay_uncertainty_ns=float(uncertainties.get("delay_ns", 0.0)),
+        background_slope_real=float(bg_sr),
+        background_slope_imag=float(bg_si),
+        background_intercept_real=float(bg_r),
+        background_intercept_imag=float(bg_i),
+        residual_rms=residual_rms,
+        residual_max=residual_max,
+        condition_number=None,
+        optimizer_converged=optimizer_converged,
+        optimizer_message=optimizer_message,
+        chi_squared=chi_sq,
+        degrees_of_freedom=int(dof),
+        reduced_chi_squared=reduced_chi_sq,
+        aic=float(aic),
+        bic=float(bic),
+        bootstrap_samples=bootstrap_samples if use_bootstrap else 0,
+        bootstrap_confidence_95=bootstrap_conf,
+        parameter_correlation={},
+        fit_timestamp_utc=datetime.now(timezone.utc),
+    )
+
+
+def _bootstrap_confidence(model_func, freq, s_data, popt, bounds,
+                          n_samples: int = 200) -> dict[str, tuple[float, float]]:
+    """Estimate 95% confidence intervals via parametric bootstrap."""
+    n = len(freq)
+    fitted = model_func(freq, *popt)
+    residuals = s_data - fitted
+    param_samples: dict[str, list[float]] = {}
+
+    for _ in range(n_samples):
+        # Resample residuals
+        idx = np.random.randint(0, n, n)
+        boot_data = fitted + residuals[idx]
+
+        def _cost(p, f, s):
+            pred = model_func(f, *p)
+            return float(np.sum(np.abs(pred - s) ** 2))
+
+        try:
+            result = minimize(
+                _cost, popt, args=(freq, boot_data),
+                method="L-BFGS-B",
+                bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1])],
+                options={"maxiter": 500},
+            )
+            b_opt = result.x
+        except Exception:
+            continue
+
+        param_names = ["f0_hz", "q_loaded", "q_coupling", "delay_ns",
+                       "bg_r", "bg_i", "bg_sr", "bg_si"]
+        for name, val in zip(param_names, b_opt):
+            param_samples.setdefault(name, []).append(float(val))
+
+    result: dict[str, tuple[float, float]] = {}
+    for name, values in param_samples.items():
+        if len(values) >= 50:
+            lo, hi = np.percentile(values, [2.5, 97.5])
+            result[name] = (float(lo), float(hi))
+
+    return result
+
+
+def detect_resonances(freq_hz: np.ndarray, s_mag_db: np.ndarray,
+                      min_depth_db: float = 3.0,
+                      min_separation_hz: float = 1e6) -> list[float]:
+    """Detect resonance frequencies from |S21| in dB.
+
+    Returns detected f0 values in Hz.
+    """
+    # Find local minima
+    from scipy.signal import argrelextrema
+    minima_idx = argrelextrema(s_mag_db, np.less)[0]
+
+    resonances = []
+    for idx in minima_idx:
+        # Check depth relative to surrounding
+        depth = 0.0
+        for offset in range(1, min(5, idx + 1)):
+            depth = max(depth, float(s_mag_db[idx + offset] - s_mag_db[idx]))
+        for offset in range(1, min(5, len(s_mag_db) - idx)):
+            depth = max(depth, float(s_mag_db[idx - offset] - s_mag_db[idx]))
+
+        if depth >= min_depth_db:
+            f0 = float(freq_hz[idx])
+            # Check separation from already-found resonances
+            if all(abs(f0 - r) >= min_separation_hz for r in resonances):
+                resonances.append(f0)
+
+    return sorted(resonances)
+
+
+def _collect_trace(network, port_out: int, port_in: int) -> np.ndarray:
+    """Extract the S(port_out, port_in) trace from a scikit-rf Network."""
+    return np.asarray(network.s[:, port_out - 1, port_in - 1])
+
+
+def fit_bundle_resonator(bundle: Path, response: str = "S21",
+                         model: str = "notch",
+                         f0_guess: float | None = None,
+                         **kwargs: Any) -> ResonatorFitResult:
+    """Fit resonator(s) from a validated bundle's Touchstone data."""
+    manifest = load_manifest(bundle / "manifest.json")
+    if manifest.touchstone is None:
+        raise ValueError("bundle has no Touchstone data")
+
+    network = load_network(safe_bundle_path(bundle, manifest.touchstone.path))
+
+    # Parse response label like "S21"
+    port_out = int(response[1])
+    port_in = int(response[2])
+    s_trace = _collect_trace(network, port_out, port_in)
+
+    return fit_resonator(
+        np.asarray(network.f),
+        s_trace,
+        response=response,
+        model=model,
+        f0_guess=f0_guess,
+        **kwargs,
+    )

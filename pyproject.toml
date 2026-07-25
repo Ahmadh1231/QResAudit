@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qresaudit"
-version = "0.1.1"
+version = "0.2.0"
 description = "Portable extraction and offline validation of solved Ansys HFSS results"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ dependencies = [
   "pandas>=2.2",
   "h5py>=3.16",
   "scikit-rf>=1.8",
+  "scipy>=1.12",
   "typer>=0.16",
   "rich>=14",
   "PyYAML>=6.0",
