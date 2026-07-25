@@ -18,8 +18,15 @@ def main() -> int:
     for name, model in SCHEMAS.items():
         path = ROOT / name
         actual = json.loads(path.read_text(encoding="utf-8"))
-        if actual != model.model_json_schema():
+        expected = model.model_json_schema()
+        if actual != expected:
             print(f"schema mismatch: {path}")
+            # Show top-level key differences
+            actual_keys = set(actual.keys())
+            expected_keys = set(expected.keys())
+            if actual_keys != expected_keys:
+                print(f"  keys only in checked-in: {actual_keys - expected_keys}")
+                print(f"  keys only in live model: {expected_keys - actual_keys}")
             failed = True
     return int(failed)
 
