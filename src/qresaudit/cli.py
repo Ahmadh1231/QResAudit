@@ -1,6 +1,7 @@
 """QResAudit CLI — portable validation, analysis, and audit of HFSS evidence bundles."""
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -31,8 +32,18 @@ from qresaudit.analysis.spin_resonator import (
 )
 from qresaudit.diagnosis import answer_query
 from qresaudit.diagnosis import diagnose as diagnose_data
+from qresaudit.digital_twin import calibrate_resonator
+from qresaudit.geometry import make_cpw_design, write_portable_spec
+from qresaudit.knowledge import KnowledgeBase
+from qresaudit.loop import SimulationLoop
 from qresaudit.models.config import ExportConfig
 from qresaudit.models.manifest import HFSSRunManifest
+from qresaudit.multiphysics import (
+    strain_frequency_shift,
+    thermal_frequency_shift,
+)
+from qresaudit.planner import plan_design
+from qresaudit.report import build_design_report, write_design_report
 from qresaudit.schema_migrate import migrate_bundle
 from qresaudit.validation.engine import ValidationResult, validate_bundle
 
@@ -520,3 +531,99 @@ def optimize_bayesian(
             console.print(f"Variables: {result.best_candidate.variables}")
         console.print(f"Evaluations: {result.evaluations}")
         console.print(f"Pareto front size: {len(result.pareto_front)}")
+
+
+@app.command("plan")
+def plan_command(prompt: Annotated[str, typer.Argument()]) -> None:
+    """Create a deterministic rule-based design plan; no LLM or solver is run."""
+    typer.echo(json.dumps(asdict(plan_design(prompt)), indent=2))
+
+
+@app.command("design-spec")
+def design_spec_command(
+    name: Annotated[str, typer.Option()],
+    frequency_hz: Annotated[float, typer.Option()],
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    center_width_m: Annotated[float, typer.Option()] = 10e-6,
+    gap_m: Annotated[float, typer.Option()] = 6e-6,
+    effective_permittivity: Annotated[float, typer.Option()] = 6.0,
+) -> None:
+    """Write a validated, solver-neutral quarter-wave CPW design specification."""
+    design = make_cpw_design(
+        name,
+        frequency_hz,
+        center_width_m=center_width_m,
+        gap_m=gap_m,
+        effective_permittivity=effective_permittivity,
+    )
+    write_portable_spec(design, str(output))
+    typer.echo(str(output.resolve()))
+
+
+@app.command("calibrate")
+def calibrate_command(
+    simulated: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    measured: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+) -> None:
+    """Calibrate frequency/Q corrections from caller-supplied JSON evidence."""
+    simulation_data = json.loads(simulated.read_text(encoding="utf-8"))
+    measurement_data = json.loads(measured.read_text(encoding="utf-8"))
+    result = calibrate_resonator(simulation_data, measurement_data)
+    typer.echo(json.dumps(asdict(result), indent=2, sort_keys=True))
+
+
+@app.command("knowledge-query")
+def knowledge_query_command(
+    database: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    text: Annotated[str, typer.Option()] = "",
+    kind: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Query caller-supplied literature/material records without inventing citations."""
+    knowledge = KnowledgeBase.from_json(database.read_text(encoding="utf-8"))
+    typer.echo(json.dumps([asdict(item) for item in knowledge.query(text, kind=kind)], indent=2))
+
+
+@app.command("research-report")
+def research_report_command(
+    design: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option("--output", "-o")],
+    title: Annotated[str, typer.Option()] = "QResAudit design report",
+    evidence: Annotated[Path | None, typer.Option(exists=True, dir_okay=False)] = None,
+) -> None:
+    """Build a reproducible report from explicit design and optional evidence JSON."""
+    design_data = json.loads(design.read_text(encoding="utf-8"))
+    evidence_data = (
+        json.loads(evidence.read_text(encoding="utf-8")) if evidence is not None else None
+    )
+    report = build_design_report(title, design_data, evidence=evidence_data)
+    write_design_report(report, output)
+    typer.echo(str(output.resolve()))
+
+
+@app.command("multiphysics")
+def multiphysics_command(
+    frequency_hz: Annotated[float, typer.Option()],
+    temperature_delta_k: Annotated[float, typer.Option()] = 0.0,
+    tempco_per_k: Annotated[float, typer.Option()] = 0.0,
+    strain: Annotated[float, typer.Option()] = 0.0,
+    gauge_factor: Annotated[float, typer.Option()] = 0.0,
+) -> None:
+    """Evaluate transparent first-order thermal and strain perturbations."""
+    result = [
+        thermal_frequency_shift(frequency_hz, temperature_delta_k, tempco_per_k).__dict__,
+        strain_frequency_shift(frequency_hz, strain, gauge_factor).__dict__,
+    ]
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("loop-dry-run")
+def loop_dry_run(
+    checkpoint: Annotated[Path, typer.Argument()], steps: Annotated[int, typer.Option()] = 2
+) -> None:
+    """Advance an offline loop without external solver/HPC execution."""
+    if steps < 1:
+        raise typer.BadParameter("steps must be positive")
+    loop = SimulationLoop(checkpoint, budget=1, allow_external=False)
+    for _ in range(steps):
+        loop.dry_run_step()
+    typer.echo(json.dumps(loop.state.__dict__, indent=2))

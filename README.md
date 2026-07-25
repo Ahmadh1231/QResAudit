@@ -77,6 +77,15 @@ benchmarks. Adapters describe capabilities and missing evidence rather than
 fabricating solver results. Tests do not contact solvers, cloud, or HPC systems.
 Reports state when only local rules were used.
 
+The master-roadmap research layer adds a Gaussian-process active-learning engine,
+correlated fabrication uncertainty and yield analysis, portable parametric CPW
+designs, experiment-backed digital-twin calibration, first-order multiphysics
+perturbations, citation-preserving knowledge records, deterministic natural-language
+planning, guarded agent tool contracts, resumable budgeted loops, and reproducible
+design reports. These are portable research APIs; proprietary solver execution still
+requires an explicit adapter, user approval, a license, and validated output evidence.
+See [`docs/v4-platform.md`](docs/v4-platform.md).
+
 ## Limitations
 
 QResAudit audits evidence; it does not prove a model is physically correct. Portable

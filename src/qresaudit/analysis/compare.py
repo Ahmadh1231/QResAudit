@@ -44,18 +44,32 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
     ):
         result.provenance_differences.append("project_file_sha256 differs")
 
-    # Variable differences
+    # Variable differences. Portable bundles may express a solved case through
+    # variation, solved_variation, project_variables, or design_variables.
+    # Comparing only the latter two silently hid real parameter sweeps.
+    variables_a = {
+        **ma.project_variables,
+        **ma.design_variables,
+        **ma.variation,
+        **ma.solved_variation,
+    }
+    variables_b = {
+        **mb.project_variables,
+        **mb.design_variables,
+        **mb.variation,
+        **mb.solved_variation,
+    }
     all_vars = (
-        set(ma.project_variables)
-        | set(mb.project_variables)
-        | set(ma.design_variables)
-        | set(mb.design_variables)
+        set(variables_a)
+        | set(variables_b)
     )
     for var in sorted(all_vars):
-        va = ma.project_variables.get(var) or ma.design_variables.get(var)
-        vb = mb.project_variables.get(var) or mb.design_variables.get(var)
-        if va and vb and va.expression != vb.expression:
-            result.variable_differences.append(f"{var}: {va.expression} vs {vb.expression}")
+        va = variables_a.get(var)
+        vb = variables_b.get(var)
+        expression_a = va.expression if va else "<missing>"
+        expression_b = vb.expression if vb else "<missing>"
+        if expression_a != expression_b:
+            result.variable_differences.append(f"{var}: {expression_a} vs {expression_b}")
 
     # Mesh differences
     mesh_a = next((f for f in ma.files if f.role == "mesh_stats"), None)

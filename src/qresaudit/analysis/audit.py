@@ -167,12 +167,18 @@ def audit_bundle(
     if conv_present:
         try:
             convergence = audit_convergence(bundle)
+            convergence_metric = (
+                "delta-frequency %"
+                if manifest.solution_kind.value == "eigenmode"
+                else "delta-S %"
+            )
             _verdict(
                 verdicts,
                 "convergence",
                 "is_converged",
                 "PASS" if convergence.is_converged else "FAIL",
-                f"{convergence.total_passes} passes, ΔS={convergence.final_max_delta_s}",
+                f"{convergence.total_passes} passes, "
+                f"{convergence_metric}={convergence.final_max_delta_s}",
             )
             if convergence.false_convergence_risk not in ("low", "not_evaluated"):
                 _verdict(

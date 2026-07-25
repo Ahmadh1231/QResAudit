@@ -119,9 +119,16 @@ def audit_convergence(bundle: Path) -> ConvergenceDiagnostic:
     if len(frequencies) >= 3:
         limit_val, limit_unc = _extrapolate_limit(frequencies)
 
-    # False convergence: declared converged but sequence still changing rapidly
+    # False convergence: declared converged but a driven-modal delta-S sequence
+    # is still changing rapidly. Eigenmode exports carry delta-frequency in
+    # this canonical column for backward schema compatibility; applying a
+    # delta-S heuristic to that sequence creates false failures.
     false_convergence_risk = "not_evaluated"
-    if final_pass.converged and len(delta_s_values) >= 2:
+    if (
+        manifest.solution_kind.value.startswith("driven")
+        and final_pass.converged
+        and len(delta_s_values) >= 2
+    ):
         recent_change = float(abs(delta_s_values[-1] - delta_s_values[-2]))
         if recent_change > 0.01:
             false_convergence_risk = "high"
