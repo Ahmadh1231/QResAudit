@@ -12,16 +12,16 @@ from qresaudit.validation.engine import validate_bundle as _validate_bundle
 __all__ = ["analyze_resonator", "generate_report", "load_bundle", "validate_bundle"]
 
 
-def validate_bundle(bundle: str | Path) -> ValidationResult:
+def validate_bundle(bundle: str | Path, *, strict: bool = True) -> ValidationResult:
     """Validate an evidence bundle without contacting any external service."""
-    return _validate_bundle(Path(bundle))
+    return _validate_bundle(Path(bundle), strict=strict)
 
 
 def load_bundle(bundle: str | Path, *, require_valid: bool = True) -> HFSSRunManifest:
     """Load a manifest and optionally require full evidence validation first."""
     root = Path(bundle)
     if require_valid:
-        result = _validate_bundle(root)
+        result = _validate_bundle(root, strict=True)
         if not result.valid:
             codes = ", ".join(sorted({item.code for item in result.diagnostics}))
             raise ValueError(f"bundle validation failed: {codes}")

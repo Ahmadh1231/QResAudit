@@ -24,12 +24,26 @@ jobs:
           cache: pip
 
       - name: Install packaging tools
-        run: python -m pip install --upgrade build twine
+        run: python -m pip install --upgrade build twine && python -m pip install -e ".[dev,docs]"
 
       - name: Verify release tag matches package version
         run: >-
           python tools/check_release_version.py
           --tag "${{ github.event.release.tag_name }}"
+
+      - name: Run release quality gates
+        run: |
+          ruff format --check .
+          ruff check .
+          mypy src
+          python -m validate_pyproject pyproject.toml
+          python tools/check_schemas.py
+          python tools/check_golden.py --require-complete
+          qresaudit benchmark
+          python -m pip_audit .
+          python -m bandit -r src -q -s B105,B110,B112
+          pytest tests/unit tests/offline_integration tests/physics
+          mkdocs build --strict
 
       - name: Build wheel and source distribution
         run: python -m build

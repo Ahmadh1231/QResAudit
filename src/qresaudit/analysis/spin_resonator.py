@@ -14,6 +14,8 @@ from qresaudit.analysis.field_integration import (
     MU_0,
     ZERO_POINT_ENERGY,
     normalize_field,
+    pair_electric_magnetic_records,
+    structured_volume_weights,
 )
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.fields_hdf5 import read_field_hdf5
@@ -59,11 +61,17 @@ def zero_point_magnetic_field(
     """
     if dV is None:
         dV = np.ones(coords.shape[0])
+    dV = np.asarray(dV, dtype=float).ravel()
+    if len(dV) != coords.shape[0] or np.any(~np.isfinite(dV)) or np.any(dV < 0):
+        raise ValueError("volume weights must be finite, non-negative, and match coordinates")
 
     b_squared = (
         np.sum(np.abs(b_field_t) ** 2, axis=-1) if b_field_t.ndim == 2 else np.abs(b_field_t) ** 2
     )
-    b_rms = float(np.sqrt(np.mean(b_squared)))
+    volume = float(np.sum(dV))
+    if volume <= 0:
+        raise ValueError("sample volume must be positive")
+    b_rms = float(np.sqrt(np.sum(b_squared * dV) / volume))
 
     b_magnitude = np.sqrt(b_squared)
     b_peak = float(np.max(b_magnitude))
@@ -83,7 +91,11 @@ def ensemble_coupling(
     g_single_hz: float, n_spins: float, thermal_polarization: float = 1.0
 ) -> float:
     """Compute ensemble coupling: g_ens = g_single · √(N_spins) · √(polarization)."""
-    return float(g_single_hz * np.sqrt(abs(n_spins)) * np.sqrt(abs(thermal_polarization)))
+    if n_spins < 0 or not np.isfinite(n_spins):
+        raise ValueError("spin count must be finite and non-negative")
+    if not 0 <= thermal_polarization <= 1 or not np.isfinite(thermal_polarization):
+        raise ValueError("thermal polarization must be finite and between zero and one")
+    return float(g_single_hz * np.sqrt(n_spins) * np.sqrt(thermal_polarization))
 
 
 def thermal_polarization(
@@ -98,6 +110,10 @@ def thermal_polarization(
     For spin ensembles at low temperature, this reduces the effective
     spin number participating in the collective coupling.
     """
+    if spin_number != 0.5:
+        raise ValueError("the tanh polarization model is valid only for spin-1/2")
+    if frequency_hz < 0:
+        raise ValueError("frequency must be non-negative")
     if temperature_k <= 0:
         return 1.0
     # Zeeman energy splitting
@@ -105,7 +121,7 @@ def thermal_polarization(
     thermal = K_B * temperature_k
     if thermal <= 0:
         return 1.0
-    return float(np.tanh(spin_number * delta_e / (2.0 * thermal)))
+    return float(np.tanh(abs(delta_e) / (2.0 * thermal)))
 
 
 def magnetic_filling_factor(
@@ -122,6 +138,13 @@ def magnetic_filling_factor(
     """
     if dV is None:
         dV = np.ones(coords.shape[0])
+    dV = np.asarray(dV, dtype=float).ravel()
+    if len(dV) != coords.shape[0] or np.any(~np.isfinite(dV)) or np.any(dV < 0):
+        raise ValueError("volume weights must be finite, non-negative, and match coordinates")
+    if region_mask is not None:
+        region_mask = np.asarray(region_mask, dtype=bool).ravel()
+        if len(region_mask) != coords.shape[0]:
+            raise ValueError("region mask must match coordinates")
 
     b_squared = np.sum(np.abs(h_field) ** 2, axis=-1) * (MU_0**2)  # |B|² from H
 
@@ -141,41 +164,98 @@ def analyze_spin_coupling(
     Assumes the bundle contains H-field (magnetic field) data.
     """
     manifest = load_manifest(bundle / "manifest.json")
+    if sample_config.sample_region_name is None:
+        raise ValueError("sample_region_name is required for spin coupling analysis")
+    if sample_config.total_field_region_name is None:
+        raise ValueError("total_field_region_name is required for spin coupling analysis")
+    if sample_config.cavity_q_loaded is None:
+        raise ValueError("cavity_q_loaded is required for spin coupling analysis")
 
-    # Find H-field for the target mode
-    h_records = [f for f in manifest.fields if f.quantity == "H" and f.mode == mode]
-    if not h_records:
-        raise ValueError(f"no H-field found for mode {mode}")
-
-    h_rec = h_records[0]
-    coords, h_raw, _, meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
-    frequency = float(meta.get("frequency_hz", h_rec.frequency_hz or 0))
-
-    # HFSS eigenmode fields are normalized to peak |E|=1 V/m
-    # We need to re-normalize to zero-point energy
-    e_records = [f for f in manifest.fields if f.quantity == "E" and f.mode == mode]
-    _e_coords, e_raw, _, _e_meta = (
-        read_field_hdf5(safe_bundle_path(bundle, e_records[0].path))
-        if e_records
-        else (None, None, None, {})
+    total_e_records = [
+        field
+        for field in manifest.fields
+        if field.quantity == "E"
+        and field.mode == mode
+        and field.region_name == sample_config.total_field_region_name
+    ]
+    total_h_records = [
+        field
+        for field in manifest.fields
+        if field.quantity == "H"
+        and field.mode == mode
+        and field.region_name == sample_config.total_field_region_name
+    ]
+    pairs = pair_electric_magnetic_records(total_e_records, total_h_records)
+    if len(pairs) != 1:
+        raise ValueError("spin analysis requires exactly one total-field E/H pair")
+    total_e_record, total_h_record = pairs[0]
+    total_coords, e_raw, _, total_e_meta = read_field_hdf5(
+        safe_bundle_path(bundle, total_e_record.path)
     )
+    total_h_coords, h_total_raw, _, total_h_meta = read_field_hdf5(
+        safe_bundle_path(bundle, total_h_record.path)
+    )
+    if not np.array_equal(total_coords, total_h_coords):
+        raise ValueError("total electric and magnetic fields use different coordinates")
+    grid_keys = ("topology", "shape", "axis_order", "flattening_order")
+    if {key: total_e_meta.get(key) for key in grid_keys} != {
+        key: total_h_meta.get(key) for key in grid_keys
+    }:
+        raise ValueError("total electric and magnetic fields use different grids")
+    if total_e_record.phasor_convention != total_h_record.phasor_convention:
+        raise ValueError("total electric and magnetic fields use different phasor conventions")
+    total_d_v = structured_volume_weights(total_coords, total_e_meta)
 
-    dV = np.ones(coords.shape[0])
+    sample_h_records = [
+        field
+        for field in manifest.fields
+        if field.quantity == "H"
+        and field.mode == mode
+        and field.region_name == sample_config.sample_region_name
+    ]
+    if len(sample_h_records) != 1:
+        raise ValueError("spin analysis requires exactly one sample-region H field")
+    sample_h_record = sample_h_records[0]
+    sample_coords, h_sample_raw, _, sample_meta = read_field_hdf5(
+        safe_bundle_path(bundle, sample_h_record.path)
+    )
+    sample_d_v = structured_volume_weights(sample_coords, sample_meta)
+    if (
+        sample_h_record.solution != total_h_record.solution
+        or sample_h_record.variation != total_h_record.variation
+        or sample_h_record.normalization != total_h_record.normalization
+        or sample_h_record.phasor_convention != total_h_record.phasor_convention
+    ):
+        raise ValueError("sample and total fields do not share a normalization context")
+    frequency = float(total_e_meta.get("frequency_hz", total_e_record.frequency_hz or 0))
+    if frequency <= 0:
+        raise ValueError("a positive field frequency is required")
+    convention_value = total_e_record.phasor_convention.value
+    if convention_value.endswith("_peak"):
+        phasor_convention = "peak"
+    elif convention_value.endswith("_rms"):
+        phasor_convention = "rms"
+    else:
+        raise ValueError("field phasor convention is unknown or not applicable")
 
     # Normalize to zero-point energy
-    target_energy = ZERO_POINT_ENERGY(2.0 * np.pi * frequency) if frequency > 0 else 1.0
-    if e_raw is not None:
-        _e_norm, h_norm, alpha = normalize_field(e_raw, h_raw, coords, target_energy, dV)
-    else:
-        # Normalize H directly using magnetic energy
-        u_m = 0.5 * MU_0 * float(np.sum(np.sum(np.abs(h_raw) ** 2, axis=-1) * dV))
-        alpha = np.sqrt(target_energy / u_m) if u_m > 0 else 1.0
-        h_norm = h_raw * alpha
+    target_energy = ZERO_POINT_ENERGY(2.0 * np.pi * frequency)
+    _e_norm, _h_total_norm, alpha = normalize_field(
+        e_raw,
+        h_total_raw,
+        total_coords,
+        target_energy,
+        total_d_v,
+        phasor_convention=phasor_convention,
+    )
+    h_norm = h_sample_raw * alpha
 
     # Convert H (A/m) to B (T): B = μ₀·H
     b_field = h_norm * MU_0
 
-    b_static = np.array(sample_config.static_b_field_t)
+    b_static = rotation_matrix_euler(
+        *np.radians(sample_config.static_b_field_orientation_euler_deg)
+    ) @ np.array(sample_config.static_b_field_t)
 
     # Effective g-tensor
     g_tensor = effective_g_tensor(
@@ -191,9 +271,13 @@ def analyze_spin_coupling(
         else abs(sample_config.g_tensor_principal[0])
     )
 
-    b_rms, b_peak = zero_point_magnetic_field(b_field, coords, dV)
-
-    filling = magnetic_filling_factor(h_raw, coords, None, dV)
+    b_rms, b_peak = zero_point_magnetic_field(b_field, sample_coords, sample_d_v)
+    sample_magnetic = float(np.sum(np.sum(np.abs(h_sample_raw) ** 2, axis=-1) * sample_d_v))
+    total_magnetic = float(np.sum(np.sum(np.abs(h_total_raw) ** 2, axis=-1) * total_d_v))
+    filling = sample_magnetic / total_magnetic if total_magnetic > 0 else 0.0
+    if not 0 <= filling <= 1.0 + 1e-9:
+        raise ValueError("sample magnetic energy exceeds total magnetic energy")
+    filling = min(filling, 1.0)
 
     g_single = single_spin_coupling(g_eff, b_rms, b_static)
     polarization = thermal_polarization(
@@ -203,21 +287,18 @@ def analyze_spin_coupling(
         b_static,
         g_eff,
     )
-    n_effective = sample_config.spin_density_per_m3 * (1.0)  # approximate volume
+    sample_volume = float(np.sum(sample_d_v))
+    n_effective = sample_config.spin_density_per_m3 * sample_volume
 
     g_ens = ensemble_coupling(g_single, n_effective, polarization)
 
     # Cavity decay rate
-    kappa = float(2.0 * np.pi * frequency / 1000.0)  # approximate, Q~1000
+    kappa = float(frequency / sample_config.cavity_q_loaded)
 
     # Spin decay rate from linewidths
-    gamma_spin = (
-        2.0
-        * np.pi
-        * max(
-            sample_config.inhomogeneous_linewidth_hz,
-            sample_config.homogeneous_linewidth_hz,
-        )
+    gamma_spin = max(
+        sample_config.inhomogeneous_linewidth_hz,
+        sample_config.homogeneous_linewidth_hz,
     )
 
     cooperativity = (4.0 * g_ens**2) / (kappa * gamma_spin) if kappa > 0 and gamma_spin > 0 else 0.0
@@ -250,39 +331,31 @@ def sweep_parameter(
     """
     couplings: list[float] = []
     cooperativities: list[float] = []
+    if parameter not in {"orientation", "temperature", "b_field_strength"}:
+        raise ValueError("unsupported spin sweep parameter")
+    if not values:
+        raise ValueError("spin sweep requires at least one value")
 
     for val in values:
         if parameter == "orientation":
             # Sweep B-field orientation about z-axis
             cfg = sample_config.model_copy(deep=True)
             cfg.static_b_field_orientation_euler_deg = [0.0, 0.0, val]
-            try:
-                result = analyze_spin_coupling(bundle, cfg)
-                couplings.append(result.ensemble_coupling_hz)
-                cooperativities.append(result.cooperativity)
-            except Exception:
-                couplings.append(0.0)
-                cooperativities.append(0.0)
+            result = analyze_spin_coupling(bundle, cfg)
+            couplings.append(result.ensemble_coupling_hz)
+            cooperativities.append(result.cooperativity)
         elif parameter == "temperature":
             cfg = sample_config.model_copy(deep=True)
             cfg.temperature_k = val
-            try:
-                result = analyze_spin_coupling(bundle, cfg)
-                couplings.append(result.ensemble_coupling_hz)
-                cooperativities.append(result.cooperativity)
-            except Exception:
-                couplings.append(0.0)
-                cooperativities.append(0.0)
+            result = analyze_spin_coupling(bundle, cfg)
+            couplings.append(result.ensemble_coupling_hz)
+            cooperativities.append(result.cooperativity)
         elif parameter == "b_field_strength":
             cfg = sample_config.model_copy(deep=True)
             cfg.static_b_field_t = [0.0, 0.0, val]
-            try:
-                result = analyze_spin_coupling(bundle, cfg)
-                couplings.append(result.ensemble_coupling_hz)
-                cooperativities.append(result.cooperativity)
-            except Exception:
-                couplings.append(0.0)
-                cooperativities.append(0.0)
+            result = analyze_spin_coupling(bundle, cfg)
+            couplings.append(result.ensemble_coupling_hz)
+            cooperativities.append(result.cooperativity)
 
     best_idx = int(np.argmax(couplings)) if couplings else 0
 

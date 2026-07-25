@@ -37,6 +37,7 @@ def test_missing_design_fails_before_hfss_construction(
 ) -> None:
     constructed = False
     closed: list[str] = []
+    desktop_closed = False
 
     class FakeProject:
         def GetName(self) -> str:
@@ -61,9 +62,13 @@ def test_missing_design_fails_before_hfss_construction(
             assert project == "project"
             return ["HFSS;ExistingDesign"]
 
-        def release_desktop(self, *, close_projects: bool, close_desktop: bool) -> None:
+        def release_desktop(self, *, close_projects: bool, close_on_exit: bool) -> None:
             assert not close_projects
-            assert not close_desktop
+            assert not close_on_exit
+
+        def close_desktop(self) -> None:
+            nonlocal desktop_closed
+            desktop_closed = True
 
     class FakeHfss:
         def __init__(self, **kwargs: object) -> None:
@@ -85,7 +90,8 @@ def test_missing_design_fails_before_hfss_construction(
         pass
 
     assert not constructed
-    assert closed == ["project"]
+    assert closed == []
+    assert desktop_closed
 
 
 def test_existing_desktop_and_project_remain_open(
@@ -121,8 +127,11 @@ def test_existing_desktop_and_project_remain_open(
         def design_list(self, project: str) -> list[str]:
             return ["HFSS;Design"]
 
-        def release_desktop(self, *, close_projects: bool, close_desktop: bool) -> None:
-            calls.append(("release", (close_projects, close_desktop)))
+        def release_desktop(self, *, close_projects: bool, close_on_exit: bool) -> None:
+            calls.append(("release", (close_projects, close_on_exit)))
+
+        def close_desktop(self) -> None:
+            calls.append(("close_desktop", None))
 
     class FakeHfss:
         def __init__(self, **kwargs: object) -> None:
@@ -181,8 +190,8 @@ def test_project_opened_in_attached_desktop_is_closed(
         def design_list(self, project: str) -> list[str]:
             return ["HFSS;Design"]
 
-        def release_desktop(self, *, close_projects: bool, close_desktop: bool) -> None:
-            calls.append(("release", (close_projects, close_desktop)))
+        def release_desktop(self, *, close_projects: bool, close_on_exit: bool) -> None:
+            calls.append(("release", (close_projects, close_on_exit)))
 
     class FakeHfss:
         project_name = "loaded_project"
@@ -237,8 +246,11 @@ def test_default_session_owns_and_closes_new_desktop(
         def design_list(self, project: str) -> list[str]:
             return ["HFSS;Design"]
 
-        def release_desktop(self, *, close_projects: bool, close_desktop: bool) -> None:
-            calls.append(("release", (close_projects, close_desktop)))
+        def release_desktop(self, *, close_projects: bool, close_on_exit: bool) -> None:
+            calls.append(("release", (close_projects, close_on_exit)))
+
+        def close_desktop(self) -> None:
+            calls.append(("close_desktop", None))
 
     class FakeHfss:
         project_name = "project"
@@ -260,8 +272,8 @@ def test_default_session_owns_and_closes_new_desktop(
     desktop_options = next(value for name, value in calls if name == "desktop")
     assert isinstance(desktop_options, dict)
     assert desktop_options["new_desktop"] is True
-    assert ("close_project", "project") in calls
-    assert ("release", (False, True)) in calls
+    assert not any(name == "close_project" for name, _ in calls)
+    assert ("close_desktop", None) in calls
 
 
 def test_remove_lock_is_rejected_for_read_only_sessions() -> None:

@@ -8,8 +8,11 @@ Install `.[dev,docs]`, then run:
 ruff format --check .
 ruff check .
 mypy src
+python -m validate_pyproject pyproject.toml
 pytest
 qresaudit benchmark
+python -m pip_audit .
+python -m bandit -r src -q -s B105,B110,B112
 mkdocs build --strict
 python -m build
 python -m twine check dist/*

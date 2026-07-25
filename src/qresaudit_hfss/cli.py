@@ -1,4 +1,6 @@
 import json
+from contextlib import AbstractContextManager, nullcontext, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from typing import Annotated
 
@@ -22,6 +24,11 @@ app = typer.Typer(
 console = Console()
 
 
+def _quiet_vendor_output(enabled: bool) -> AbstractContextManager[object]:
+    """Keep machine-readable CLI output free of PyAEDT startup messages."""
+    return redirect_stdout(StringIO()) if enabled else nullcontext()
+
+
 @app.callback()
 def main(
     version: Annotated[bool, typer.Option("--version", help="Show the package version.")] = False,
@@ -34,21 +41,21 @@ def main(
 @app.command()
 def inspect(
     project: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
-    design: Annotated[str | None, typer.Option("--design")] = None,
+    design: Annotated[str, typer.Option("--design", help="Exact AEDT design name.")],
     aedt_version: Annotated[str | None, typer.Option("--aedt-version")] = None,
     student: Annotated[bool, typer.Option("--student")] = False,
+    graphical: Annotated[bool, typer.Option("--graphical")] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
-    selected = design or project.stem
     try:
         project_config = ProjectConfig(
             path=project,
-            design=selected,
+            design=design,
             aedt_version=aedt_version,
-            non_graphical=not student,
+            non_graphical=not (student or graphical),
             student_version=student,
         )
-        with open_hfss_session(project_config) as hfss:
+        with _quiet_vendor_output(json_output), open_hfss_session(project_config) as hfss:
             result = inspect_design(hfss)
         if json_output:
             typer.echo(json.dumps(result.model_dump(mode="json"), indent=2))
@@ -100,8 +107,12 @@ def export(
             if not payload["ok"]:
                 raise typer.Exit(4)
             return
-        result = export_bundle(config, output, force=force)
-        console.print(f"[green]Bundle validated and published:[/green] {result}")
+        with _quiet_vendor_output(json_output):
+            result = export_bundle(config, output, force=force)
+        if json_output:
+            typer.echo(json.dumps({"ok": True, "bundle": str(result)}))
+        else:
+            console.print(f"[green]Bundle validated and published:[/green] {result}")
     except (ValidationError, ValueError) as exc:
         console.print(f"[red]Configuration error:[/red] {exc}")
         raise typer.Exit(2) from exc
@@ -127,7 +138,7 @@ def preflight(
 ) -> None:
     try:
         config = load_config(config_path, project_override=project)
-        with open_hfss_session(config.project) as hfss:
+        with _quiet_vendor_output(json_output), open_hfss_session(config.project) as hfss:
             inspection = inspect_design(hfss)
             diagnostics = run_preflight(inspection, config)
         ok = not any(item.severity is Severity.ERROR for item in diagnostics)

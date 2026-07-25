@@ -24,3 +24,9 @@ be copied from QResAudit's own output.
 The gate passes only if strict bundle validation succeeds, all declared numerical
 ranges pass, the manual comparison is signed and dated, and an independent
 machine reproduces the report. Synthetic data never satisfies this contract.
+
+The inventory hash is the SHA-256 of `bundle/checksums.sha256`. The manual review
+record must contain `status: "PASS"`, `reviewer`, `reviewed_at_utc`,
+`independent_machine`, and `metrics_verified: true`. Run
+`python tools/check_golden.py --require-complete` for a release that claims
+real-solver validation.

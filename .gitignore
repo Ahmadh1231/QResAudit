@@ -31,3 +31,4 @@ Thumbs.db
 # QResAudit transient export staging
 *.partial/
 tmp/
+batch.log

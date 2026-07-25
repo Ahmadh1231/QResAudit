@@ -487,18 +487,15 @@ app.add_typer(spin_app, name="spin")
 @spin_app.command("analyze")
 def spin_analyze(
     bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
-    ensemble: Annotated[Path | None, typer.Option("--ensemble", exists=True)] = None,
+    ensemble: Annotated[Path, typer.Option("--ensemble", exists=True)],
     mode: Annotated[int, typer.Option("--mode")] = 1,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Analyze spin-resonator coupling from a bundle."""
-    if ensemble:
-        import yaml
+    import yaml
 
-        raw = yaml.safe_load(ensemble.read_text(encoding="utf-8"))
-        sample = SpinSampleConfig.model_validate(raw)
-    else:
-        sample = SpinSampleConfig()
+    raw = yaml.safe_load(ensemble.read_text(encoding="utf-8"))
+    sample = SpinSampleConfig.model_validate(raw)
 
     result = analyze_spin_coupling(bundle, sample, mode=mode)
     if json_output:
@@ -516,6 +513,7 @@ def spin_analyze(
 @spin_app.command("sweep")
 def spin_sweep(
     bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    ensemble: Annotated[Path, typer.Option("--ensemble", exists=True)],
     parameter: Annotated[str, typer.Option("--parameter", "-p")] = "orientation",
     start: Annotated[float, typer.Option("--start")] = 0.0,
     stop: Annotated[float, typer.Option("--stop")] = 360.0,
@@ -526,7 +524,9 @@ def spin_sweep(
     import numpy as np
 
     values = np.linspace(start, stop, steps).tolist()
-    sample = SpinSampleConfig()
+    import yaml
+
+    sample = SpinSampleConfig.model_validate(yaml.safe_load(ensemble.read_text(encoding="utf-8")))
     result = sweep_parameter(bundle, sample, parameter, values)
     if json_output:
         typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, default=str))

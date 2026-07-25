@@ -19,6 +19,13 @@ def open_hfss_session(config: ProjectConfig) -> Iterator[Any]:
         )
     try:
         from ansys.aedt.core import Desktop, Hfss
+
+        # QResAudit owns its CLI output (especially JSON mode). PyAEDT still
+        # writes detailed diagnostics to its log files.
+        with suppress(ImportError):
+            from ansys.aedt.core import settings
+
+            settings.enable_screen_logs = False
     except ImportError as exc:
         raise HFSSSessionError(
             "PyAEDT is unavailable; install qresaudit[hfss] in an AEDT-compatible environment"
@@ -86,17 +93,22 @@ def open_hfss_session(config: ProjectConfig) -> Iterator[Any]:
     except Exception as exc:
         raise HFSSSessionError(f"HFSS_PROJECT_OPEN_FAILED: {exc}") from exc
     finally:
-        # Never close an explicitly attached desktop. Close only a project that
-        # this context opened, regardless of who owns the desktop process.
+        # Never close an explicitly attached desktop. A desktop created by this
+        # context is closed through the Desktop object itself; releasing the
+        # secondary Hfss wrapper can detach without terminating AEDT.
         if desktop is not None:
-            if owns_project and project_name is not None:
+            if owns_desktop:
                 with suppress(Exception):
-                    desktop.odesktop.CloseProject(project_name)
-            with suppress(Exception):
-                desktop.release_desktop(
-                    close_projects=False,
-                    close_desktop=owns_desktop,
-                )
+                    desktop.close_desktop()
+            else:
+                if owns_project and project_name is not None:
+                    with suppress(Exception):
+                        desktop.odesktop.CloseProject(project_name)
+                with suppress(Exception):
+                    desktop.release_desktop(
+                        close_projects=False,
+                        close_on_exit=False,
+                    )
 
 
 def _find_loaded_project(desktop: Any, project_path: Path) -> Any | None:

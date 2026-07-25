@@ -18,3 +18,9 @@ Field integration accuracy depends on the exported topology, units, material
 assignment, and volume weights. Uniform-grid analytical tests exercise the
 formula, while real golden bundles are required to validate the exporter and
 solver-to-analysis chain.
+
+Bundle-level volume integration accepts only a complete paired E/H context on a
+three-dimensional structured Cartesian grid. QResAudit uses tensor-product
+trapezoidal weights, including nonuniform axis spacing. It rejects unstructured
+point clouds, planar grids with no declared thickness, unknown phasor conventions,
+grid mismatches, and missing E/H partners instead of assuming a unit volume.

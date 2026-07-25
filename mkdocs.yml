@@ -10,6 +10,13 @@ nav:
   - HFSS workflow: hfss_workflow.md
   - Resonator analysis: resonator_analysis.md
   - Field analysis: field_analysis.md
+  - Spin analysis: spin_analysis.md
   - Publication workflow: publication_workflow.md
   - Bundle format: bundle-format.md
+  - Specification: specification.md
+  - Compatibility: compatibility.md
+  - V2 platform: v2-platform.md
+  - V4 platform: v4-platform.md
+  - Releasing: releasing.md
   - Developer guide: developer_guide.md
+  - Exporter developer guide: developer-guide.md

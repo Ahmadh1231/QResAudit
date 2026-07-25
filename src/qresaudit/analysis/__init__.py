@@ -42,6 +42,7 @@ from qresaudit.analysis.mode_tracking import (
     compute_overlap_matrix,
     detect_crossings,
     field_overlap,
+    propagate_branch_ids,
     track_modes,
 )
 from qresaudit.analysis.optimization import (
@@ -138,6 +139,7 @@ __all__ = [
     "normalized_participation",
     "notch_model",
     "peak_model",
+    "propagate_branch_ids",
     "random_latin_hypercube",
     "reflection_model",
     "render_audit_html",

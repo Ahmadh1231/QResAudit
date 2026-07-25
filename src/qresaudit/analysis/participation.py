@@ -17,6 +17,8 @@ import yaml
 
 from qresaudit.analysis.field_integration import (
     compute_energy,
+    pair_electric_magnetic_records,
+    structured_volume_weights,
 )
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.fields_hdf5 import read_field_hdf5
@@ -95,22 +97,45 @@ def compute_participation(
     total_m_energy = 0.0
     total_volume = 0.0
 
-    for e_rec, h_rec in zip(e_records, h_records, strict=False):
-        e_coords, e_vals, _, _e_meta = read_field_hdf5(safe_bundle_path(bundle, e_rec.path))
-        _h_coords, h_vals, _, _h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
+    for e_rec, h_rec in pair_electric_magnetic_records(e_records, h_records):
+        e_coords, e_vals, _, e_meta = read_field_hdf5(safe_bundle_path(bundle, e_rec.path))
+        h_coords, h_vals, _, h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
+        if not np.array_equal(e_coords, h_coords):
+            raise ValueError("paired electric and magnetic fields use different coordinates")
+        grid_keys = ("topology", "shape", "axis_order", "flattening_order")
+        if {key: e_meta.get(key) for key in grid_keys} != {
+            key: h_meta.get(key) for key in grid_keys
+        }:
+            raise ValueError("paired electric and magnetic fields use different grids")
+        if e_rec.phasor_convention != h_rec.phasor_convention:
+            raise ValueError("paired electric and magnetic fields use different phasor conventions")
+        convention_value = e_rec.phasor_convention.value
+        if convention_value.endswith("_peak"):
+            phasor_convention = "peak"
+        elif convention_value.endswith("_rms"):
+            phasor_convention = "rms"
+        else:
+            raise ValueError("field phasor convention is unknown or not applicable")
 
         region = e_rec.region_name
         material = regions.get(region)
 
-        # Default volume element
-        dV = np.ones(e_coords.shape[0])
+        dV = structured_volume_weights(e_coords, e_meta)
 
         eps_r = material.relative_permittivity if material else epsilon_r_global
         mu_r = material.relative_permeability if material else mu_r_global
         tan_delta_e = material.dielectric_loss_tangent if material else 0.0
         tan_delta_m = material.magnetic_loss_tangent if material else 0.0
 
-        energy = compute_energy(e_coords, e_vals, h_vals, dV, eps_r, mu_r)
+        energy = compute_energy(
+            e_coords,
+            e_vals,
+            h_vals,
+            dV,
+            eps_r,
+            mu_r,
+            phasor_convention,
+        )
         u_e = energy["electric_energy_j"]
         u_m = energy["magnetic_energy_j"]
 

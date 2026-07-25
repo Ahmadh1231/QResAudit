@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from qresaudit.analysis.mode_tracking import assign_modes, field_overlap
+from qresaudit.analysis.mode_tracking import assign_modes, field_overlap, propagate_branch_ids
 
 
 def test_overlap_is_phase_invariant_and_permittivity_normalized() -> None:
@@ -25,3 +25,11 @@ def test_assignment_tracks_swapped_modes() -> None:
 
     assert assignments == [1, 0]
     assert confidence > 0.98
+
+
+def test_branch_identity_survives_repeated_raw_mode_reordering() -> None:
+    branch_ids = [0, 1, 2]
+    branch_ids = propagate_branch_ids(branch_ids, [1, 0, 2])
+    branch_ids = propagate_branch_ids(branch_ids, [2, 1, 0])
+
+    assert branch_ids == [2, 0, 1]

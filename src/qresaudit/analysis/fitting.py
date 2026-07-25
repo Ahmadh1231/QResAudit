@@ -122,6 +122,7 @@ def fit_resonator(
     cable_delay_guess_ns: float = 0.0,
     use_bootstrap: bool = True,
     bootstrap_samples: int = 200,
+    bootstrap_seed: int = 0,
 ) -> ResonatorFitResult:
     """Fit a resonator model to S-parameter data.
 
@@ -145,6 +146,8 @@ def fit_resonator(
         Whether to compute bootstrap uncertainties.
     bootstrap_samples : int
         Number of bootstrap resamples.
+    bootstrap_seed : int
+        Seed for reproducible residual resampling.
 
     Returns
     -------
@@ -252,6 +255,7 @@ def fit_resonator(
     popt = _unpack_internal(fit.x)
     pcov = None
     condition_number = None
+    fit_warnings: list[str] = []
     try:
         information = fit.jac.T @ fit.jac
         condition_number = float(np.linalg.cond(information))
@@ -263,7 +267,7 @@ def fit_resonator(
         )
         pcov = transform @ covariance_internal @ transform.T
     except np.linalg.LinAlgError:
-        pass
+        fit_warnings.append("parameter covariance could not be estimated")
     optimizer_converged = bool(fit.success)
     optimizer_message = str(fit.message)
 
@@ -282,8 +286,11 @@ def fit_resonator(
     if model == "notch":
         inverse_q_internal = 1.0 / ql_abs - 1.0 / qc_abs
         qi = 1.0 / inverse_q_internal if inverse_q_internal > 0 else None
+        if qi is None:
+            fit_warnings.append("notch parameters do not imply a positive internal Q")
     else:
-        qi = ql_abs  # approximate for peak; depends on coupling
+        qi = None
+        fit_warnings.append(f"internal Q is not identified by the {model} model")
 
     coupling_coeff = ql_abs / qc_abs if qc_abs > 0 else None
 
@@ -303,24 +310,26 @@ def fit_resonator(
                 "bg_si",
             ]
             uncertainties = {n: float(v) for n, v in zip(param_names, perr, strict=False)}
-        except Exception:
-            pass
+        except (FloatingPointError, ValueError) as exc:
+            fit_warnings.append(f"parameter uncertainty calculation failed: {exc}")
 
-    f0_unc = uncertainties.get("f0_hz", abs(f0) * 1e-6)
-    ql_unc = uncertainties.get("q_loaded", ql_abs * 0.1)
-    qc_unc = uncertainties.get("q_coupling", qc_abs * 0.1)
+    f0_unc = uncertainties.get("f0_hz", 0.0)
+    ql_unc = uncertainties.get("q_loaded", 0.0)
+    qc_unc = uncertainties.get("q_coupling", 0.0)
+    if not uncertainties:
+        fit_warnings.append("fit uncertainty is unavailable")
+    if condition_number is not None and condition_number > 1e12:
+        fit_warnings.append("fit is ill-conditioned; parameter uncertainties may be unreliable")
 
     # Compute AIC and BIC for model comparison
     n_params = 8
     n_points = 2 * len(freq_hz)
-    rss = float(np.sum(np.abs(residuals) ** 2))
+    rss = max(float(np.sum(np.abs(residuals) ** 2)), np.finfo(float).tiny)
     log_likelihood = -0.5 * n_points * np.log(2 * np.pi * rss / n_points) - 0.5 * n_points
     aic = 2 * n_params - 2 * log_likelihood
     bic = n_params * np.log(n_points) - 2 * log_likelihood
 
-    chi_sq = float(np.sum(np.abs(residuals / (np.abs(fitted) + 1e-15)) ** 2))
     dof = n_points - n_params
-    reduced_chi_sq = chi_sq / dof if dof > 0 else None
 
     # Bootstrap uncertainties
     bootstrap_conf = {}
@@ -336,10 +345,13 @@ def fit_resonator(
                     [freq_hz[-1], 1e12, 1e12, 100.0, 10.0, 10.0, np.inf, np.inf],
                 ),
                 n_samples=bootstrap_samples,
+                seed=bootstrap_seed,
             )
             bootstrap_conf = b_conf
         except Exception:
-            pass
+            fit_warnings.append("bootstrap uncertainty estimation failed")
+        if not bootstrap_conf:
+            fit_warnings.append("bootstrap produced too few successful samples")
 
     return ResonatorFitResult(
         model=model,
@@ -363,14 +375,15 @@ def fit_resonator(
         condition_number=condition_number,
         optimizer_converged=optimizer_converged,
         optimizer_message=optimizer_message,
-        chi_squared=chi_sq,
+        chi_squared=None,
         degrees_of_freedom=int(dof),
-        reduced_chi_squared=reduced_chi_sq,
+        reduced_chi_squared=None,
         aic=float(aic),
         bic=float(bic),
         bootstrap_samples=bootstrap_samples if use_bootstrap else 0,
         bootstrap_confidence_95=bootstrap_conf,
         parameter_correlation={},
+        warnings=fit_warnings,
         fit_timestamp_utc=datetime.now(UTC),
     )
 
@@ -382,22 +395,25 @@ def _bootstrap_confidence(
     popt: np.ndarray,
     bounds: tuple[list[float], list[float]],
     n_samples: int = 200,
+    seed: int = 0,
 ) -> dict[str, tuple[float, float]]:
     """Estimate 95% confidence intervals via parametric bootstrap."""
     n = len(freq)
+    rng = np.random.default_rng(seed)
     fitted = model_func(freq, *popt)
     residuals = s_data - fitted
     param_samples: dict[str, list[float]] = {}
 
     for _ in range(n_samples):
         # Resample residuals
-        idx = np.random.randint(0, n, n)
+        idx = rng.integers(0, n, n)
         boot_data = fitted + residuals[idx]
 
         def _cost(p, f, s):
             pred = model_func(f, *p)
             return float(np.sum(np.abs(pred - s) ** 2))
 
+        b_opt: np.ndarray | None = None
         try:
             opt_result = minimize(
                 _cost,
@@ -409,20 +425,21 @@ def _bootstrap_confidence(
             )
             b_opt = opt_result.x
         except Exception:
-            continue
+            b_opt = None
 
-        param_names = [
-            "f0_hz",
-            "q_loaded",
-            "q_coupling",
-            "delay_ns",
-            "bg_r",
-            "bg_i",
-            "bg_sr",
-            "bg_si",
-        ]
-        for name, val in zip(param_names, b_opt, strict=False):
-            param_samples.setdefault(name, []).append(float(val))
+        if b_opt is not None:
+            param_names = [
+                "f0_hz",
+                "q_loaded",
+                "q_coupling",
+                "delay_ns",
+                "bg_r",
+                "bg_i",
+                "bg_sr",
+                "bg_si",
+            ]
+            for name, val in zip(param_names, b_opt, strict=False):
+                param_samples.setdefault(name, []).append(float(val))
 
     result: dict[str, tuple[float, float]] = {}
     for name, values in param_samples.items():

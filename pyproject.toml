@@ -10,6 +10,25 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Ahmadh Hassan" }]
+keywords = [
+  "electromagnetics",
+  "hfss",
+  "quantum-devices",
+  "reproducibility",
+  "resonator",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Typing :: Typed",
+]
 dependencies = [
   "pydantic>=2.13.4,<2.14",
   "numpy>=2.0",
@@ -21,6 +40,7 @@ dependencies = [
   "rich>=14",
   "PyYAML>=6.0",
   "platformdirs>=4.0",
+  "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
@@ -32,8 +52,17 @@ dev = [
   "hypothesis>=6",
   "ruff>=0.12",
   "mypy>=1.16",
+  "pip-audit>=2.10",
+  "bandit>=1.9",
+  "validate-pyproject>=0.25",
+  "types-defusedxml>=0.7",
 ]
-docs = ["mkdocs>=1.6", "mkdocs-material>=9.6"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "pillow>=12.3"]
+
+[project.urls]
+Documentation = "https://ahmadh1231.github.io/QResAudit/"
+Issues = "https://github.com/Ahmadh1231/QResAudit/issues"
+Repository = "https://github.com/Ahmadh1231/QResAudit"
 
 [project.scripts]
 qresaudit = "qresaudit.cli:app"

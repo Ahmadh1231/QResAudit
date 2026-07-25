@@ -1,5 +1,6 @@
 """Compatibility tests for the frozen local-only API and CLI."""
 
+import tomllib
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -20,6 +21,14 @@ def test_package_root_exposes_only_stable_names() -> None:
         "load_bundle",
         "validate_bundle",
     ]
+
+
+def test_package_metadata_declares_docs_extra_and_typed_marker() -> None:
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "docs" in metadata["project"]["optional-dependencies"]
+    assert "docs" not in metadata["project"]["urls"]
+    assert (ROOT / "src" / "qresaudit" / "py.typed").is_file()
 
 
 def test_stable_validation_and_loading_are_local() -> None:

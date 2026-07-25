@@ -11,22 +11,23 @@ This adapter reads these outputs and produces a canonical QResAudit bundle.
 """
 
 import csv
+import platform
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from qresaudit import __version__
 from qresaudit.hashing import run_id_for, sha256_file, write_checksums
 from qresaudit.io.bundle import prepare_bundle_directories, write_manifest
 from qresaudit.models.common import (
     EvidenceProfile,
     ExportStatus,
-    FieldRepresentation,
-    NormalizationKind,
     SolutionKind,
+    warning,
 )
 from qresaudit.models.manifest import (
     EigenmodeRecord,
-    FieldRecord,
     FileRecord,
     HFSSRunManifest,
     TouchstoneRecord,
@@ -58,7 +59,7 @@ def _file_record(
         size_bytes=path.stat().st_size,
         required=required,
         source_path=source_path,
-        generated_by="qresaudit-palace 0.4.0",
+        generated_by=f"qresaudit-palace {__version__}",
     )
 
 
@@ -117,9 +118,20 @@ def convert_palace_run(
     -------
     Path to the created bundle.
     """
+    if not palace_output_dir.is_dir():
+        raise FileNotFoundError(f"Palace output directory not found: {palace_output_dir}")
+    if output_bundle.exists():
+        raise FileExistsError(f"destination already exists: {output_bundle}")
     prepare_bundle_directories(output_bundle)
     files: list[FileRecord] = []
     timestamp = datetime.now(UTC)
+    solver_config = palace_output_dir / "config.json"
+    if not solver_config.is_file():
+        raise ValueError("Palace output must include config.json for solver provenance")
+    provenance_target = output_bundle / "provenance" / "palace_config.json"
+    provenance_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(solver_config, provenance_target)
+    files.append(_file_record(provenance_target, output_bundle, "solver_config", True))
 
     # Detect solution type
     eigenmode_csv = palace_output_dir / "eigenmode.csv"
@@ -145,6 +157,9 @@ def convert_palace_run(
     eigenmode_record = None
     if is_eigen:
         modes_data = read_palace_eigenmodes(eigenmode_csv)
+        for mode in modes_data:
+            mode["source_solution"] = "palace : LastAdaptive"
+            mode["variation_id"] = run_id
         mode_count = len(modes_data)
 
         # Write canonical modes CSV
@@ -154,7 +169,9 @@ def convert_palace_run(
         target = output_bundle / "modes" / "eigenmodes.csv"
         modes_df.to_csv(target, index=False)
         files.append(_file_record(target, output_bundle, "eigenmodes", True))
-        files.append(_file_record(eigenmode_csv, output_bundle, "eigenmodes_raw", False))
+        raw_target = output_bundle / "modes" / "raw_eigenmode.csv"
+        shutil.copy2(eigenmode_csv, raw_target)
+        files.append(_file_record(raw_target, output_bundle, "eigenmodes_raw", False))
 
         eigenmode_record = EigenmodeRecord(
             path="modes/eigenmodes.csv",
@@ -166,7 +183,7 @@ def convert_palace_run(
     if is_driven:
         for snp in sorted(palace_output_dir.glob("*.s*p")):
             target = output_bundle / "network" / snp.name
-            target.write_bytes(snp.read_bytes())
+            shutil.copy2(snp, target)
             files.append(_file_record(target, output_bundle, "touchstone", True))
             from qresaudit.io.touchstone import load_network, network_metadata
 
@@ -179,51 +196,31 @@ def convert_palace_run(
             )
             touchstone_record = TouchstoneRecord.model_validate(metadata)
             break
+        if touchstone_record is None:
+            raise ValueError("driven Palace output lacks a Touchstone .sNp file")
 
-    # Field data
-    field_records: list[FieldRecord] = []
+    # Preserve native field files without creating misleading canonical records.
+    raw_fields_present = False
     postpro_dir = palace_output_dir / "postpro"
     if postpro_dir.is_dir():
         for vtu_file in sorted(postpro_dir.glob("*.vtu")):
-            # Copy raw VTU
+            raw_fields_present = True
             raw_target = output_bundle / "fields" / "raw" / vtu_file.name
             raw_target.parent.mkdir(parents=True, exist_ok=True)
-            raw_target.write_bytes(vtu_file.read_bytes())
-            files.append(_file_record(raw_target, output_bundle, "field_raw", True))
-
-            # For now, produce a placeholder HDF5 — full VTU→HDF5 conversion
-            # would use vtk/pyvista to extract structured grid data
-            field_records.append(
-                FieldRecord(
-                    path=f"fields/raw/{vtu_file.name}",
-                    raw_path=f"fields/raw/{vtu_file.name}",
-                    quantity="E" if "e_field" in vtu_file.name.lower() else "H",
-                    complex_data=False,
-                    vector=True,
-                    units="V/m",
-                    coordinate_units="m",
-                    coordinate_system="Global",
-                    grid_type="Cartesian",
-                    region_name="default",
-                    assignment=["AllObjects"],
-                    object_type="Vol",
-                    solution="palace_solution",
-                    normalization=NormalizationKind.USER_SCALED,
-                    shape=[0],
-                    point_count=0,
-                    representation=FieldRepresentation.REAL_GAUGE,
-                )
-            )
+            shutil.copy2(vtu_file, raw_target)
+            files.append(_file_record(raw_target, output_bundle, "field_raw", False))
 
     # Manifest
     manifest = HFSSRunManifest(
-        exporter_version="0.4.0",  # palace adapter version
-        bundle_status=ExportStatus.COMPLETE,
+        exporter_version=__version__,
+        bundle_status=(
+            ExportStatus.COMPLETE_WITH_WARNINGS if raw_fields_present else ExportStatus.COMPLETE
+        ),
         run_id=run_id,
         export_timestamp_utc=timestamp,
         project_name=project_name,
-        project_file_name=f"{project_name}.json",
-        project_file_sha256=None,
+        project_file_name=provenance_target.name,
+        project_file_sha256=sha256_file(provenance_target),
         design_name=design_name,
         design_type="Palace",
         solution_kind=solution_kind,
@@ -235,19 +232,28 @@ def convert_palace_run(
         project_variables={},
         design_variables={},
         solved_variation={},
-        evidence_profile=EvidenceProfile.STANDARD,
+        evidence_profile=EvidenceProfile.MINIMAL,
         aedt_version="N/A (Palace)",
         pyaedt_version="N/A (Palace)",
-        python_version="3.x",
-        operating_system="platform",
+        python_version=platform.python_version(),
+        operating_system=f"{platform.system()} {platform.release()}",
         model_units="m",
         reference_coordinate_system="Global",
-        ports=[],
+        ports=touchstone_record.port_names if touchstone_record is not None else [],
         touchstone=touchstone_record,
         eigenmode=eigenmode_record,
-        fields=field_records,
+        fields=[],
         files=files,
-        diagnostics=[],
+        diagnostics=(
+            [
+                warning(
+                    "PALACE_FIELDS_RAW_ONLY",
+                    "Native VTU fields were preserved but are not canonical analysis inputs",
+                )
+            ]
+            if raw_fields_present
+            else []
+        ),
     )
 
     write_manifest(output_bundle / "manifest.json", manifest)

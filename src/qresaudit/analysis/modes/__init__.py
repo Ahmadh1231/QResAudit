@@ -6,6 +6,7 @@ from qresaudit.analysis.mode_tracking import (
     compute_overlap_matrix,
     detect_crossings,
     field_overlap,
+    propagate_branch_ids,
     track_modes,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "compute_overlap_matrix",
     "detect_crossings",
     "field_overlap",
+    "propagate_branch_ids",
     "track_modes",
 ]

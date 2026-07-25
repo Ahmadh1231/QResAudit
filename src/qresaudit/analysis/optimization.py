@@ -231,8 +231,8 @@ def evaluate_candidate(
 ) -> OptimizationCandidate:
     """Evaluate objectives and constraints for a given variable set.
 
-    This is a placeholder — in a real run, this would invoke an external
-    solver or surrogate model evaluation.
+    Expressions are evaluated locally against the supplied design variables.
+    Solver-backed evaluation is deliberately a separate caller responsibility.
     """
     obj_vals: dict[str, float] = {}
     for obj in objectives:

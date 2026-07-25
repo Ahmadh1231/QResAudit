@@ -26,9 +26,13 @@ jobs:
       - run: ruff format --check .
       - run: ruff check .
       - run: mypy src
+      - run: python -m validate_pyproject pyproject.toml
       - run: pytest tests/unit tests/offline_integration tests/physics
       - run: qresaudit benchmark --output analytical-benchmarks.json
-      - run: python tools/check_golden.py
+      - run: python tools/check_golden.py --require-complete
+      - run: python -m pip_audit .
+      - run: python -m pip_audit . --format cyclonedx-json --output sbom.cdx.json
+      - run: python -m bandit -r src -q -s B105,B110,B112
       - run: mkdocs build --strict
       - run: python -m build
       - run: python -m twine check dist/*
@@ -38,5 +42,6 @@ jobs:
           name: release-validation-artifacts
           path: |
             analytical-benchmarks.json
+            sbom.cdx.json
             dist/*
           if-no-files-found: error

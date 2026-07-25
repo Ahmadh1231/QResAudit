@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from qresaudit.models.common import Diagnostic, SolutionKind, error
+from qresaudit.models.common import Diagnostic, SolutionKind, error, warning
 from qresaudit.models.config import ExportConfig
 from qresaudit.units import (
     RECOGNIZED_COORDINATE_UNITS,
@@ -40,11 +40,13 @@ class DesignInspection(BaseModel):
 
 def map_solution_kind(value: str) -> SolutionKind | None:
     normalized = value.lower().replace(" ", "").replace("_", "")
-    if "drivenmodal" in normalized:
+    # PyAEDT reports either the descriptive AEDT names or the shortened
+    # ``Modal``/``Terminal`` values depending on its version and backend.
+    if normalized in {"modal", "drivenmodal"}:
         return SolutionKind.DRIVEN_MODAL
-    if "driventerminal" in normalized:
+    if normalized in {"terminal", "driventerminal"}:
         return SolutionKind.DRIVEN_TERMINAL
-    if "eigenmode" in normalized:
+    if normalized == "eigenmode":
         return SolutionKind.EIGENMODE
     return None
 
@@ -69,13 +71,42 @@ def inspect_design(app: Any) -> DesignInspection:
     reports = [str(value) for value in getattr(app.post, "all_report_names", [])]
     excitations = [str(value) for value in getattr(app, "excitation_names", [])]
     ports = [value for value in excitations if value]
+    inspection_warnings: list[Diagnostic] = []
     available_variations: list[dict[str, str]] = []
     try:
-        raw_variations = app.available_variations.variations(app.nominal_sweep)
-        available_variations = [{"raw": str(value)} for value in raw_variations]
-    except Exception:
-        pass
-    object_names = [str(value) for value in getattr(app.modeler, "object_names", [])]
+        raw_variations: set[str] = set()
+        for reference in sweeps:
+            setup, separator, sweep = reference.partition(":")
+            if not separator:
+                continue
+            raw_variations.update(
+                str(value)
+                for value in app.list_of_variations(setup=setup.strip(), sweep=sweep.strip())
+                if str(value).strip()
+            )
+        available_variations = [{"raw": value} for value in sorted(raw_variations)]
+    except Exception as exc:
+        inspection_warnings.append(
+            warning(
+                "HFSS_VARIATIONS_UNAVAILABLE",
+                "Solved variations could not be enumerated",
+                detail=str(exc),
+            )
+        )
+    object_names: list[str] = []
+    model_units = ""
+    try:
+        modeler = app.modeler
+        object_names = [str(value) for value in getattr(modeler, "object_names", [])]
+        model_units = str(getattr(modeler, "model_units", ""))
+    except Exception as exc:
+        inspection_warnings.append(
+            warning(
+                "HFSS_MODELER_INSPECTION_UNAVAILABLE",
+                "Modeler metadata could not be enumerated",
+                detail=str(exc),
+            )
+        )
     solved = bool(sweeps)
     modes_available = None
     if map_solution_kind(solution_type) is SolutionKind.EIGENMODE:
@@ -87,7 +118,7 @@ def inspect_design(app: Any) -> DesignInspection:
         design_type=str(getattr(app, "design_type", "HFSS")),
         solution_type_raw=solution_type,
         solution_kind=map_solution_kind(solution_type),
-        model_units=str(getattr(app.modeler, "model_units", "")),
+        model_units=model_units,
         setups=setup_names,
         setup_sweeps=sweeps,
         existing_analysis_sweeps=sweeps,
@@ -100,6 +131,7 @@ def inspect_design(app: Any) -> DesignInspection:
         solved=solved,
         modes_available=modes_available,
         object_names=object_names,
+        warnings=inspection_warnings,
     )
 
 
@@ -152,7 +184,8 @@ def field_grid_point_count(field: Any) -> int | None:
         path = Path(field.grid.sample_points_file)
         return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
     counts = field_grid_shape(field)
-    assert counts is not None
+    if counts is None:
+        raise ValueError("field grid shape is unavailable")
     return counts[0] * counts[1] * counts[2]
 
 

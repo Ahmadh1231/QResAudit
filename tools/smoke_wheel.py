@@ -41,6 +41,23 @@ def main() -> None:
                 cwd=environment,
                 env=command_environment,
             )
+        subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from importlib.resources import files; "
+                    "from qresaudit.api import validate_bundle, load_bundle, "
+                    "analyze_resonator, generate_report; "
+                    "from qresaudit.benchmarks import run_benchmarks; "
+                    "assert files('qresaudit').joinpath('py.typed').is_file(); "
+                    "assert run_benchmarks()['passed']"
+                ),
+            ],
+            check=True,
+            cwd=environment,
+            env=command_environment,
+        )
 
 
 if __name__ == "__main__":

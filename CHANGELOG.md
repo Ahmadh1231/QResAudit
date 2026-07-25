@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Removed silent unit-volume, cubic-grid, field-order, one-cubic-meter sample, and
+  assumed-cavity-Q fallbacks from field, participation, mode, comparison, and spin analysis.
+- Added nonuniform 3D quadrature, persistent mode-branch identity, safe report escaping,
+  explicit spin evidence contracts, dependency auditing, typed-package metadata, and docs deployment.
 - Added a frozen local-only API for validation, loading, resonator analysis, and reports.
 - Replaced magnitude/implicit-complex fitting with bounded complex least squares.
 - Corrected field energy to distinguish peak-phasor (1/4) and RMS (1/2) conventions.

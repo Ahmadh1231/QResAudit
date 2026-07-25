@@ -1,6 +1,7 @@
 # QResAudit v2
 
 [![CI](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml/badge.svg)](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml)
+[![Documentation](https://github.com/Ahmadh1231/QResAudit/actions/workflows/docs.yml/badge.svg)](https://ahmadh1231.github.io/QResAudit/)
 
 QResAudit turns electromagnetic simulation and measurement evidence into portable,
 auditable research records. The validated HFSS evidence/export boundary remains the

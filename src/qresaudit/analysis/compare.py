@@ -11,10 +11,12 @@ from pathlib import Path
 
 import numpy as np
 
+from qresaudit.analysis.field_integration import structured_volume_weights
 from qresaudit.analysis.mode_tracking import field_overlap
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.fields_hdf5 import read_field_hdf5
 from qresaudit.io.touchstone import load_network
+from qresaudit.models.manifest import FieldRecord
 from qresaudit.models.v0_2 import ComparisonResult, ModeOverlapResult
 
 
@@ -82,20 +84,34 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
                 tb = db["tetrahedra"].iloc[-1]
                 if abs(ta - tb) / (abs(ta) + 1) > 0.05:
                     result.mesh_differences.append(f"tetrahedra: {ta} vs {tb}")
-        except Exception:
-            pass
+        except Exception as exc:
+            result.diagnostic_differences.append(f"mesh comparison failed: {exc}")
 
     # Touchstone comparison
     if ma.touchstone and mb.touchstone:
         try:
             na = load_network(safe_bundle_path(bundle_a, ma.touchstone.path))
             nb = load_network(safe_bundle_path(bundle_b, mb.touchstone.path))
-            rms_diff = float(np.sqrt(np.mean(np.abs(na.s - nb.s) ** 2)))
-            max_diff = float(np.max(np.abs(na.s - nb.s)))
+            if na.nports != nb.nports:
+                raise ValueError(f"port count differs: {na.nports} vs {nb.nports}")
+            common = (na.f >= nb.f[0]) & (na.f <= nb.f[-1])
+            frequency = np.asarray(na.f[common])
+            if len(frequency) < 2:
+                raise ValueError("network frequency ranges do not overlap")
+            a_values = np.asarray(na.s[common])
+            b_values = np.empty_like(a_values)
+            for port_out in range(na.nports):
+                for port_in in range(na.nports):
+                    trace = nb.s[:, port_out, port_in]
+                    b_values[:, port_out, port_in] = np.interp(
+                        frequency, nb.f, trace.real
+                    ) + 1j * np.interp(frequency, nb.f, trace.imag)
+            rms_diff = float(np.sqrt(np.mean(np.abs(a_values - b_values) ** 2)))
+            max_diff = float(np.max(np.abs(a_values - b_values)))
             result.s_parameter_rms_difference = rms_diff
             result.s_parameter_max_difference = max_diff
-        except Exception:
-            pass
+        except Exception as exc:
+            result.diagnostic_differences.append(f"network comparison failed: {exc}")
 
     # Frequency and Q differences for eigenmode bundles
     if ma.eigenmode and mb.eigenmode:
@@ -111,15 +127,31 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
                 result.resonant_frequency_relative = (
                     float(abs(fa - fb) / abs(fa)) if fa != 0 else 0.0
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            result.diagnostic_differences.append(f"eigenmode comparison failed: {exc}")
 
     # Field overlap comparison
     if ma.fields and mb.fields:
         overlaps = []
-        for fa, fb in zip(ma.fields, mb.fields, strict=False):
+
+        def field_key(record: FieldRecord) -> tuple[object, ...]:
+            return (
+                record.quantity,
+                record.mode,
+                record.region_name,
+                record.frequency_hz,
+                record.excitation,
+                tuple(sorted(record.variation.items())),
+            )
+
+        fields_a = {field_key(record): record for record in ma.fields}
+        fields_b = {field_key(record): record for record in mb.fields}
+        if fields_a.keys() != fields_b.keys():
+            result.diagnostic_differences.append("field contexts differ between bundles")
+        for key in fields_a.keys() & fields_b.keys():
+            fa, fb = fields_a[key], fields_b[key]
             try:
-                ca_raw, va_raw, _, _ = read_field_hdf5(safe_bundle_path(bundle_a, fa.path))
+                ca_raw, va_raw, _, meta_a = read_field_hdf5(safe_bundle_path(bundle_a, fa.path))
                 cb_raw, vb_raw, _, _ = read_field_hdf5(safe_bundle_path(bundle_b, fb.path))
                 if ca_raw is None or va_raw is None or cb_raw is None or vb_raw is None:
                     continue
@@ -127,7 +159,8 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
                 va_arr: np.ndarray = va_raw
                 cb_arr: np.ndarray = cb_raw
                 vb_arr: np.ndarray = vb_raw
-                overlap_val = field_overlap(ca_arr, va_arr, cb_arr, vb_arr)
+                weights = structured_volume_weights(ca_arr, meta_a)
+                overlap_val = field_overlap(ca_arr, va_arr, cb_arr, vb_arr, volume_weights=weights)
                 overlaps.append(
                     ModeOverlapResult(
                         mode_a=fa.mode or 0,
@@ -140,8 +173,8 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
                         ),
                     )
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                result.diagnostic_differences.append(f"field comparison failed for {key}: {exc}")
         result.mode_overlap = overlaps
 
     # Classification
@@ -152,6 +185,8 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
             result.classification = "SOLVER_VERSION_DIFFERENCE"
         else:
             result.classification = "CONFIGURATION_DIFFERENCE"
+    elif result.diagnostic_differences:
+        result.classification = "MISSING_EVIDENCE"
     elif result.s_parameter_rms_difference is not None:
         if result.s_parameter_rms_difference < 1e-6:
             result.classification = "NUMERICAL_DIFFERENCE"

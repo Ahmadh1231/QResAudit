@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from qresaudit.analysis.field_integration import structured_volume_weights
 from qresaudit.io.fields_hdf5 import read_field_hdf5
 from qresaudit.models.v0_2 import AvoidedCrossing, ModeBranch
 
@@ -23,6 +24,7 @@ def field_overlap(
     coords_b: np.ndarray,
     values_b: np.ndarray,
     epsilon_r: float = 1.0,
+    volume_weights: np.ndarray | None = None,
 ) -> float:
     """Compute phase-invariant normalized field overlap integral.
 
@@ -49,16 +51,33 @@ def field_overlap(
     else:
         values_b_interp = values_b
 
+    if epsilon_r <= 0:
+        raise ValueError("relative permittivity must be positive")
+    if volume_weights is None:
+        volume_weights = np.ones(len(coords_a))
+    volume_weights = np.asarray(volume_weights, dtype=float).ravel()
+    if (
+        len(volume_weights) != len(coords_a)
+        or np.any(~np.isfinite(volume_weights))
+        or np.any(volume_weights < 0)
+        or np.sum(volume_weights) <= 0
+    ):
+        raise ValueError("volume weights must be finite, non-negative, and match coordinates")
+
     if values_a.ndim == 2 and values_a.shape[1] == 3:
         # Vector field
         dot = np.sum(np.conj(values_a) * values_b_interp, axis=1) * epsilon_r
+        magnitude_a = np.sum(np.abs(values_a) ** 2, axis=1)
+        magnitude_b = np.sum(np.abs(values_b_interp) ** 2, axis=1)
     else:
         # Scalar field
         dot = np.conj(values_a) * values_b_interp * epsilon_r
+        magnitude_a = np.abs(values_a) ** 2
+        magnitude_b = np.abs(values_b_interp) ** 2
 
-    numerator = abs(np.sum(dot))
-    norm_a = np.sqrt(epsilon_r * np.sum(np.abs(values_a) ** 2))
-    norm_b = np.sqrt(epsilon_r * np.sum(np.abs(values_b_interp) ** 2))
+    numerator = abs(np.sum(dot * volume_weights))
+    norm_a = np.sqrt(epsilon_r * np.sum(magnitude_a * volume_weights))
+    norm_b = np.sqrt(epsilon_r * np.sum(magnitude_b * volume_weights))
 
     if norm_a == 0 or norm_b == 0:
         return 0.0
@@ -84,7 +103,8 @@ def compute_overlap_matrix(field_files: list[Path]) -> np.ndarray:
             ci, vi = data[i][0], data[i][1]
             cj, vj = data[j][0], data[j][1]
             epsilon_r = float(data[i][2].get("relative_permittivity", 1.0))
-            overlap[i, j] = field_overlap(ci, vi, cj, vj, epsilon_r)
+            weights = structured_volume_weights(ci, data[i][2])
+            overlap[i, j] = field_overlap(ci, vi, cj, vj, epsilon_r, weights)
 
     return overlap
 
@@ -99,12 +119,14 @@ def compute_cross_overlap_matrix(
     for i, (coords_a, values_a, _magnitude_a, meta_a) in enumerate(previous):
         epsilon_r = float(meta_a.get("relative_permittivity", 1.0))
         for j, (coords_b, values_b, _magnitude_b, _meta_b) in enumerate(current):
+            weights = structured_volume_weights(coords_a, meta_a)
             overlap[i, j] = field_overlap(
                 coords_a,
                 values_a,
                 coords_b,
                 values_b,
                 epsilon_r,
+                weights,
             )
     return overlap
 
@@ -130,6 +152,15 @@ def assign_modes(overlap_matrix: np.ndarray) -> tuple[list[int], float]:
         confidences[c] = float(overlap_matrix[r, c])
 
     return assignments, float(np.mean(confidences))
+
+
+def propagate_branch_ids(previous_branch_ids: list[int], assignments: list[int]) -> list[int]:
+    """Map current raw mode indices onto persistent branch identifiers."""
+    if len(previous_branch_ids) != len(assignments):
+        raise ValueError("branch IDs and assignments must have the same length")
+    if sorted(assignments) != list(range(len(assignments))):
+        raise ValueError("mode assignments must be a complete permutation")
+    return [previous_branch_ids[previous_index] for previous_index in assignments]
 
 
 def detect_crossings(
@@ -229,17 +260,15 @@ def track_modes(
 
     # Frequency data
     mode_freqs: dict[int, list[float]] = {}
-    mode_indices: dict[int, list[int]] = {}
-
     # Initialize from first sweep point
     for mode_idx in range(n_modes):
         _coords, _values, _mag, meta = read_field_hdf5(sweep_field_sets[0][mode_idx])
         freq = float(meta.get("frequency_hz", 0))
         mode_freqs[mode_idx] = [freq]
-        mode_indices[mode_idx] = [mode_idx]
 
     # Track through remaining sweep points
     branches: list[ModeBranch] = []
+    previous_branch_ids = list(range(n_modes))
     for point_idx in range(1, n_points):
         previous_files = sweep_field_sets[point_idx - 1]
         curr_files = sweep_field_sets[point_idx]
@@ -251,14 +280,13 @@ def track_modes(
         overlap = compute_cross_overlap_matrix(previous_files, curr_files)
 
         new_assignments, _confidence = assign_modes(overlap)
+        current_branch_ids = propagate_branch_ids(previous_branch_ids, new_assignments)
 
-        # Map: where does each previous mode go in the current point?
-        new_freqs: dict[int, float] = {}
-        for curr_idx, prev_idx in enumerate(new_assignments):
+        for curr_idx, branch_id in enumerate(current_branch_ids):
             _coords, _values, _mag, meta = read_field_hdf5(curr_files[curr_idx])
             freq = float(meta.get("frequency_hz", 0))
-            mode_freqs.setdefault(prev_idx, []).append(freq)
-            new_freqs[prev_idx] = freq
+            mode_freqs[branch_id].append(freq)
+        previous_branch_ids = current_branch_ids
 
     # Build mode branches
     for mode_idx, freqs in mode_freqs.items():

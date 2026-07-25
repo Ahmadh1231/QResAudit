@@ -341,7 +341,7 @@ class AuditReport(StrictModel):
     bundle_path: str
     audit_timestamp_utc: datetime
     schema_version: str = "0.2.0"
-    auditor_version: str = "0.2.0"
+    auditor_version: str = "2.0.0"
     verdicts: list[AuditVerdict] = Field(default_factory=list)
     convergence: ConvergenceDiagnostic | None = None
     fit_results: dict[str, ResonatorFitResult] = Field(default_factory=dict)
@@ -357,19 +357,36 @@ class AuditReport(StrictModel):
 
 class SpinSampleConfig(StrictModel):
     name: str = "sample"
-    spin_density_per_m3: float = 0.0
+    spin_density_per_m3: float = Field(default=0.0, ge=0)
     spin_species: str = "Er3+"
-    g_tensor_principal: list[float] = Field(default_factory=lambda: [15.0, 15.0, 15.0])
-    g_tensor_orientation_euler_deg: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    crystal_class: str = ""
-    inhomogeneous_linewidth_hz: float = 0.0
-    homogeneous_linewidth_hz: float = 0.0
-    spin_number: float = 0.5
-    temperature_k: float = 0.01
-    static_b_field_t: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    static_b_field_orientation_euler_deg: list[float] = Field(
-        default_factory=lambda: [0.0, 0.0, 0.0]
+    g_tensor_principal: list[float] = Field(
+        default_factory=lambda: [15.0, 15.0, 15.0],
+        min_length=3,
+        max_length=3,
     )
+    g_tensor_orientation_euler_deg: list[float] = Field(
+        default_factory=lambda: [0.0, 0.0, 0.0],
+        min_length=3,
+        max_length=3,
+    )
+    crystal_class: str = ""
+    inhomogeneous_linewidth_hz: float = Field(default=0.0, ge=0)
+    homogeneous_linewidth_hz: float = Field(default=0.0, ge=0)
+    spin_number: float = Field(default=0.5, gt=0)
+    temperature_k: float = Field(default=0.01, ge=0)
+    static_b_field_t: list[float] = Field(
+        default_factory=lambda: [0.0, 0.0, 0.0],
+        min_length=3,
+        max_length=3,
+    )
+    static_b_field_orientation_euler_deg: list[float] = Field(
+        default_factory=lambda: [0.0, 0.0, 0.0],
+        min_length=3,
+        max_length=3,
+    )
+    sample_region_name: str | None = None
+    total_field_region_name: str | None = None
+    cavity_q_loaded: float | None = Field(default=None, gt=0)
 
 
 class SpinCouplingResult(StrictModel):

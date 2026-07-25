@@ -32,6 +32,7 @@ wheel and source distribution, validates their metadata, installs the wheel in a
 clean environment, and only then grants the separate publish job an OIDC token.
 The final upload workflow name is **Publish to PyPI**.
 
-`python tools/check_golden.py` reports the independent scientific evidence status.
-Use `--require-complete` only for a release that claims real-solver validation;
-ordinary package publication must still describe an incomplete golden gate honestly.
+Both release workflows run `python tools/check_golden.py --require-complete`.
+Production publication is therefore blocked until every required real-solver family
+has complete checksums, expected metrics, and independent manual review. Run the
+command locally before tagging; never replace the evidence with synthetic fixtures.
