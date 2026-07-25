@@ -1,5 +1,7 @@
 # QResAudit
 
+[![CI](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml/badge.svg)](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml)
+
 QResAudit exports solved Ansys HFSS evidence into a portable bundle and validates that
 bundle without AEDT, PyAEDT, or an Ansys license. Version 0.1 targets HFSS 3D Driven
 Modal and Eigenmode results. Driven Terminal export is intentionally disabled

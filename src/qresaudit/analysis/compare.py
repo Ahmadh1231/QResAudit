@@ -8,7 +8,6 @@ Command:
 """
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -38,12 +37,20 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
         result.provenance_differences.append(f"pyaedt: {ma.pyaedt_version} vs {mb.pyaedt_version}")
     if ma.python_version != mb.python_version:
         result.provenance_differences.append(f"python: {ma.python_version} vs {mb.python_version}")
-    if ma.project_file_sha256 != mb.project_file_sha256 and ma.project_file_sha256 and mb.project_file_sha256:
+    if (
+        ma.project_file_sha256 != mb.project_file_sha256
+        and ma.project_file_sha256
+        and mb.project_file_sha256
+    ):
         result.provenance_differences.append("project_file_sha256 differs")
 
     # Variable differences
-    all_vars = set(ma.project_variables) | set(mb.project_variables) | \
-               set(ma.design_variables) | set(mb.design_variables)
+    all_vars = (
+        set(ma.project_variables)
+        | set(mb.project_variables)
+        | set(ma.design_variables)
+        | set(mb.design_variables)
+    )
     for var in sorted(all_vars):
         va = ma.project_variables.get(var) or ma.design_variables.get(var)
         vb = mb.project_variables.get(var) or mb.design_variables.get(var)
@@ -56,6 +63,7 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
     if mesh_a and mesh_b:
         try:
             import pandas as pd
+
             da = pd.read_csv(safe_bundle_path(bundle_a, mesh_a.path))
             db = pd.read_csv(safe_bundle_path(bundle_b, mesh_b.path))
             if len(da) > 0 and len(db) > 0:
@@ -82,32 +90,45 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
     if ma.eigenmode and mb.eigenmode:
         try:
             import pandas as pd
+
             ea = pd.read_csv(safe_bundle_path(bundle_a, ma.eigenmode.path))
             eb = pd.read_csv(safe_bundle_path(bundle_b, mb.eigenmode.path))
             if "frequency_real_hz" in ea and "frequency_real_hz" in eb:
                 fa = ea["frequency_real_hz"].iloc[0]
                 fb = eb["frequency_real_hz"].iloc[0]
                 result.resonant_frequency_difference_hz = float(abs(fa - fb))
-                result.resonant_frequency_relative = float(abs(fa - fb) / abs(fa)) if fa != 0 else 0.0
+                result.resonant_frequency_relative = (
+                    float(abs(fa - fb) / abs(fa)) if fa != 0 else 0.0
+                )
         except Exception:
             pass
 
     # Field overlap comparison
     if ma.fields and mb.fields:
         overlaps = []
-        for fa, fb in zip(ma.fields, mb.fields):
+        for fa, fb in zip(ma.fields, mb.fields, strict=False):
             try:
-                ca, va, _, _ = read_field_hdf5(safe_bundle_path(bundle_a, fa.path))
-                cb, vb, _, _ = read_field_hdf5(safe_bundle_path(bundle_b, fb.path))
-                overlap_val = field_overlap(ca, va, cb, vb)
-                overlaps.append(ModeOverlapResult(
-                    mode_a=fa.mode or 0,
-                    mode_b=fb.mode or 0,
-                    electric_overlap=overlap_val,
-                    frequency_a_hz=fa.frequency_hz or 0.0,
-                    frequency_b_hz=fb.frequency_hz or 0.0,
-                    frequency_difference_hz=float(abs((fa.frequency_hz or 0) - (fb.frequency_hz or 0))),
-                ))
+                ca_raw, va_raw, _, _ = read_field_hdf5(safe_bundle_path(bundle_a, fa.path))
+                cb_raw, vb_raw, _, _ = read_field_hdf5(safe_bundle_path(bundle_b, fb.path))
+                if ca_raw is None or va_raw is None or cb_raw is None or vb_raw is None:
+                    continue
+                ca_arr: np.ndarray = ca_raw
+                va_arr: np.ndarray = va_raw
+                cb_arr: np.ndarray = cb_raw
+                vb_arr: np.ndarray = vb_raw
+                overlap_val = field_overlap(ca_arr, va_arr, cb_arr, vb_arr)
+                overlaps.append(
+                    ModeOverlapResult(
+                        mode_a=fa.mode or 0,
+                        mode_b=fb.mode or 0,
+                        electric_overlap=overlap_val,
+                        frequency_a_hz=fa.frequency_hz or 0.0,
+                        frequency_b_hz=fb.frequency_hz or 0.0,
+                        frequency_difference_hz=float(
+                            abs((fa.frequency_hz or 0) - (fb.frequency_hz or 0))
+                        ),
+                    )
+                )
             except Exception:
                 pass
         result.mode_overlap = overlaps

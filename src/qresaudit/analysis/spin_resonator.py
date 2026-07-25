@@ -5,18 +5,14 @@ Commands:
     qresaudit spin sweep BUNDLE --parameter orientation
 """
 
-import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
 from qresaudit.analysis.field_integration import (
-    EPSILON_0,
     HBAR,
     MU_0,
     ZERO_POINT_ENERGY,
-    compute_energy,
     normalize_field,
 )
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
@@ -37,25 +33,26 @@ def rotation_matrix_euler(alpha: float, beta: float, gamma: float) -> np.ndarray
     ca, sa = np.cos(alpha), np.sin(alpha)
     cb, sb = np.cos(beta), np.sin(beta)
     cg, sg = np.cos(gamma), np.sin(gamma)
-    return np.array([
-        [ca*cb*cg - sa*sg, -ca*cb*sg - sa*cg, ca*sb],
-        [sa*cb*cg + ca*sg, -sa*cb*sg + ca*cg, sa*sb],
-        [-sb*cg, sb*sg, cb],
-    ])
+    return np.array(
+        [
+            [ca * cb * cg - sa * sg, -ca * cb * sg - sa * cg, ca * sb],
+            [sa * cb * cg + ca * sg, -sa * cb * sg + ca * cg, sa * sb],
+            [-sb * cg, sb * sg, cb],
+        ]
+    )
 
 
-def effective_g_tensor(g_principal: list[float],
-                       orientation_euler_deg: list[float]) -> np.ndarray:
+def effective_g_tensor(g_principal: list[float], orientation_euler_deg: list[float]) -> np.ndarray:
     """Build the effective g-tensor in the lab frame."""
     g_diag = np.diag(g_principal)
     alpha, beta, gamma = np.radians(orientation_euler_deg)
     R = rotation_matrix_euler(alpha, beta, gamma)
-    return R @ g_diag @ R.T
+    return R @ g_diag @ R.T  # type: ignore[no-any-return]
 
 
-def zero_point_magnetic_field(b_field_t: np.ndarray,
-                              coords: np.ndarray,
-                              dV: np.ndarray | None = None) -> tuple[float, float]:
+def zero_point_magnetic_field(
+    b_field_t: np.ndarray, coords: np.ndarray, dV: np.ndarray | None = None
+) -> tuple[float, float]:
     """Compute RMS and peak zero-point B-field in Tesla.
 
     Returns (B_rms, B_peak) in Tesla.
@@ -63,7 +60,9 @@ def zero_point_magnetic_field(b_field_t: np.ndarray,
     if dV is None:
         dV = np.ones(coords.shape[0])
 
-    b_squared = np.sum(np.abs(b_field_t) ** 2, axis=-1) if b_field_t.ndim == 2 else np.abs(b_field_t) ** 2
+    b_squared = (
+        np.sum(np.abs(b_field_t) ** 2, axis=-1) if b_field_t.ndim == 2 else np.abs(b_field_t) ** 2
+    )
     b_rms = float(np.sqrt(np.mean(b_squared)))
 
     b_magnitude = np.sqrt(b_squared)
@@ -80,15 +79,20 @@ def single_spin_coupling(g_eff: float, b_zpf_rms_t: float, b_static_t: np.ndarra
     return float(abs(g_eff) * MU_B * b_zpf_rms_t / (2.0 * np.pi * HBAR))
 
 
-def ensemble_coupling(g_single_hz: float, n_spins: float,
-                      thermal_polarization: float = 1.0) -> float:
+def ensemble_coupling(
+    g_single_hz: float, n_spins: float, thermal_polarization: float = 1.0
+) -> float:
     """Compute ensemble coupling: g_ens = g_single · √(N_spins) · √(polarization)."""
     return float(g_single_hz * np.sqrt(abs(n_spins)) * np.sqrt(abs(thermal_polarization)))
 
 
-def thermal_polarization(spin_number: float, temperature_k: float,
-                         frequency_hz: float, b_static_t: np.ndarray,
-                         g_eff: float) -> float:
+def thermal_polarization(
+    spin_number: float,
+    temperature_k: float,
+    frequency_hz: float,
+    b_static_t: np.ndarray,
+    g_eff: float,
+) -> float:
     """Thermal polarization P = tanh(ħω / 2kT).
 
     For spin ensembles at low temperature, this reduces the effective
@@ -104,9 +108,12 @@ def thermal_polarization(spin_number: float, temperature_k: float,
     return float(np.tanh(spin_number * delta_e / (2.0 * thermal)))
 
 
-def magnetic_filling_factor(h_field: np.ndarray, coords: np.ndarray,
-                            region_mask: np.ndarray | None = None,
-                            dV: np.ndarray | None = None) -> float:
+def magnetic_filling_factor(
+    h_field: np.ndarray,
+    coords: np.ndarray,
+    region_mask: np.ndarray | None = None,
+    dV: np.ndarray | None = None,
+) -> float:
     """Compute the magnetic filling factor in a sample region.
 
     η = ∫_sample |B₁|² dV / ∫_total |B₁|² dV
@@ -116,12 +123,9 @@ def magnetic_filling_factor(h_field: np.ndarray, coords: np.ndarray,
     if dV is None:
         dV = np.ones(coords.shape[0])
 
-    b_squared = np.sum(np.abs(h_field) ** 2, axis=-1) * (MU_0 ** 2)  # |B|² from H
+    b_squared = np.sum(np.abs(h_field) ** 2, axis=-1) * (MU_0**2)  # |B|² from H
 
-    if region_mask is not None:
-        sample_b_squared = b_squared * region_mask
-    else:
-        sample_b_squared = b_squared
+    sample_b_squared = b_squared * region_mask if region_mask is not None else b_squared
 
     total = float(np.sum(b_squared * dV))
     sample = float(np.sum(sample_b_squared * dV))
@@ -129,9 +133,9 @@ def magnetic_filling_factor(h_field: np.ndarray, coords: np.ndarray,
     return sample / total if total > 0 else 0.0
 
 
-def analyze_spin_coupling(bundle: Path,
-                          sample_config: SpinSampleConfig,
-                          mode: int = 1) -> SpinCouplingResult:
+def analyze_spin_coupling(
+    bundle: Path, sample_config: SpinSampleConfig, mode: int = 1
+) -> SpinCouplingResult:
     """Analyze spin-resonator coupling from a validated bundle.
 
     Assumes the bundle contains H-field (magnetic field) data.
@@ -150,16 +154,18 @@ def analyze_spin_coupling(bundle: Path,
     # HFSS eigenmode fields are normalized to peak |E|=1 V/m
     # We need to re-normalize to zero-point energy
     e_records = [f for f in manifest.fields if f.quantity == "E" and f.mode == mode]
-    e_coords, e_raw, _, e_meta = (read_field_hdf5(safe_bundle_path(bundle, e_records[0].path))
-                                   if e_records else (None, None, None, {}))
+    _e_coords, e_raw, _, _e_meta = (
+        read_field_hdf5(safe_bundle_path(bundle, e_records[0].path))
+        if e_records
+        else (None, None, None, {})
+    )
 
     dV = np.ones(coords.shape[0])
 
     # Normalize to zero-point energy
     target_energy = ZERO_POINT_ENERGY(2.0 * np.pi * frequency) if frequency > 0 else 1.0
     if e_raw is not None:
-        e_norm, h_norm, alpha = normalize_field(e_raw, h_raw, coords,
-                                                 target_energy, dV)
+        _e_norm, h_norm, alpha = normalize_field(e_raw, h_raw, coords, target_energy, dV)
     else:
         # Normalize H directly using magnetic energy
         u_m = 0.5 * MU_0 * float(np.sum(np.sum(np.abs(h_raw) ** 2, axis=-1) * dV))
@@ -179,7 +185,11 @@ def analyze_spin_coupling(bundle: Path,
 
     # Apply cavity orientation to static field
     b_static_rot = g_tensor @ b_static if np.any(b_static) else b_static
-    g_eff = float(np.linalg.norm(b_static_rot) / (np.linalg.norm(b_static) + 1e-30)) if np.any(b_static) else abs(sample_config.g_tensor_principal[0])
+    g_eff = (
+        float(np.linalg.norm(b_static_rot) / (np.linalg.norm(b_static) + 1e-30))
+        if np.any(b_static)
+        else abs(sample_config.g_tensor_principal[0])
+    )
 
     b_rms, b_peak = zero_point_magnetic_field(b_field, coords, dV)
 
@@ -187,8 +197,11 @@ def analyze_spin_coupling(bundle: Path,
 
     g_single = single_spin_coupling(g_eff, b_rms, b_static)
     polarization = thermal_polarization(
-        sample_config.spin_number, sample_config.temperature_k,
-        frequency, b_static, g_eff,
+        sample_config.spin_number,
+        sample_config.temperature_k,
+        frequency,
+        b_static,
+        g_eff,
     )
     n_effective = sample_config.spin_density_per_m3 * (1.0)  # approximate volume
 
@@ -198,12 +211,16 @@ def analyze_spin_coupling(bundle: Path,
     kappa = float(2.0 * np.pi * frequency / 1000.0)  # approximate, Q~1000
 
     # Spin decay rate from linewidths
-    gamma_spin = 2.0 * np.pi * max(
-        sample_config.inhomogeneous_linewidth_hz,
-        sample_config.homogeneous_linewidth_hz,
+    gamma_spin = (
+        2.0
+        * np.pi
+        * max(
+            sample_config.inhomogeneous_linewidth_hz,
+            sample_config.homogeneous_linewidth_hz,
+        )
     )
 
-    cooperativity = (4.0 * g_ens ** 2) / (kappa * gamma_spin) if kappa > 0 and gamma_spin > 0 else 0.0
+    cooperativity = (4.0 * g_ens**2) / (kappa * gamma_spin) if kappa > 0 and gamma_spin > 0 else 0.0
 
     return SpinCouplingResult(
         sample_name=sample_config.name,
@@ -224,9 +241,9 @@ def analyze_spin_coupling(bundle: Path,
     )
 
 
-def sweep_parameter(bundle: Path, sample_config: SpinSampleConfig,
-                    parameter: str,
-                    values: list[float]) -> SpinSweepResult:
+def sweep_parameter(
+    bundle: Path, sample_config: SpinSampleConfig, parameter: str, values: list[float]
+) -> SpinSweepResult:
     """Sweep a spin-sample parameter and return coupling vs parameter data.
 
     Currently supports: 'orientation' (B-field rotation axis sweep).
@@ -276,5 +293,7 @@ def sweep_parameter(bundle: Path, sample_config: SpinSampleConfig,
         cooperativities=cooperativities,
         optimal_value=values[best_idx] if values and best_idx < len(values) else None,
         optimal_coupling_hz=couplings[best_idx] if best_idx < len(couplings) else None,
-        optimal_cooperativity=cooperativities[best_idx] if best_idx < len(cooperativities) else None,
+        optimal_cooperativity=cooperativities[best_idx]
+        if best_idx < len(cooperativities)
+        else None,
     )

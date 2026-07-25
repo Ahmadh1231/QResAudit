@@ -4,7 +4,6 @@ Command:
     qresaudit convergence BUNDLE
 """
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -20,14 +19,18 @@ def canonical_passes(convergence_df: pd.DataFrame) -> list[AdaptivePassRecord]:
     """Convert a parsed convergence DataFrame into structured records."""
     passes: list[AdaptivePassRecord] = []
     for _, row in convergence_df.iterrows():
-        passes.append(AdaptivePassRecord(
-            pass_number=int(row["pass_number"]),
-            tetrahedra=0,  # not available in convergence table alone
-            frequency_hz=float(row["frequency_hz"]) if pd.notna(row["frequency_hz"]) else None,
-            maximum_delta_s=float(row["max_delta_s_percent"]) if pd.notna(row["max_delta_s_percent"]) else None,
-            converged=bool(row["converged"]) if pd.notna(row["converged"]) else False,
-            raw_evidence_path=str(row.get("raw_evidence_path", "")),
-        ))
+        passes.append(
+            AdaptivePassRecord(
+                pass_number=int(row["pass_number"]),
+                tetrahedra=0,  # not available in convergence table alone
+                frequency_hz=float(row["frequency_hz"]) if pd.notna(row["frequency_hz"]) else None,
+                maximum_delta_s=float(row["max_delta_s_percent"])
+                if pd.notna(row["max_delta_s_percent"])
+                else None,
+                converged=bool(row["converged"]) if pd.notna(row["converged"]) else False,
+                raw_evidence_path=str(row.get("raw_evidence_path", "")),
+            )
+        )
     return passes
 
 
@@ -54,7 +57,7 @@ def _detect_stagnation(values: np.ndarray, threshold: float = 1e-4) -> bool:
     finite = values[np.isfinite(values)]
     if len(finite) < 3:
         return False
-    last_few = finite[-min(3, len(finite)):]
+    last_few = finite[-min(3, len(finite)) :]
     return bool(np.std(last_few) < threshold * np.abs(np.mean(last_few) + 1e-30))
 
 
@@ -62,7 +65,7 @@ def _extrapolate_limit(values: np.ndarray) -> tuple[float, float]:
     """Richardson-like extrapolation of limiting value."""
     finite = values[np.isfinite(values)]
     if len(finite) < 3:
-        return float(finite[-1]) if len(finite) > 0 else (0.0, 0.0)
+        return (float(finite[-1]), 0.0) if len(finite) > 0 else (0.0, 0.0)
     # Linear fit to last 3 points vs 1/pass
     passes = np.arange(len(finite) - 3, len(finite), dtype=float) + 1
     x = 1.0 / passes
@@ -95,8 +98,12 @@ def audit_convergence(bundle: Path) -> ConvergenceDiagnostic:
     if not passes:
         return ConvergenceDiagnostic(insufficient_passes=True)
 
-    frequencies = np.array([p.frequency_hz for p in passes if p.frequency_hz is not None], dtype=float)
-    delta_s_values = np.array([p.maximum_delta_s for p in passes if p.maximum_delta_s is not None], dtype=float)
+    frequencies = np.array(
+        [p.frequency_hz for p in passes if p.frequency_hz is not None], dtype=float
+    )
+    delta_s_values = np.array(
+        [p.maximum_delta_s for p in passes if p.maximum_delta_s is not None], dtype=float
+    )
 
     final_pass = passes[-1]
     mesh_growth = None
@@ -133,8 +140,12 @@ def audit_convergence(bundle: Path) -> ConvergenceDiagnostic:
         mesh_growth_ratio=mesh_growth,
         is_monotonic_frequency=_is_monotonic(frequencies) if len(frequencies) >= 2 else False,
         is_monotonic_delta_s=_is_monotonic(delta_s_values) if len(delta_s_values) >= 2 else False,
-        oscillation_detected=_detect_oscillation(delta_s_values) if len(delta_s_values) >= 3 else False,
-        stagnation_detected=_detect_stagnation(delta_s_values) if len(delta_s_values) >= 3 else False,
+        oscillation_detected=_detect_oscillation(delta_s_values)
+        if len(delta_s_values) >= 3
+        else False,
+        stagnation_detected=_detect_stagnation(delta_s_values)
+        if len(delta_s_values) >= 3
+        else False,
         insufficient_passes=len(passes) < 2,
         achieved_max_delta_s=final_pass.maximum_delta_s,
         false_convergence_risk=false_convergence_risk,
@@ -147,16 +158,18 @@ def convergence_to_dataframe(diag: ConvergenceDiagnostic) -> pd.DataFrame:
     """Convert a ConvergenceDiagnostic to a pandas DataFrame for CSV export."""
     rows = []
     for p in diag.passes:
-        rows.append({
-            "pass_number": p.pass_number,
-            "tetrahedra": p.tetrahedra,
-            "frequency_hz": p.frequency_hz,
-            "frequency_change_fraction": p.frequency_change_fraction,
-            "maximum_delta_s": p.maximum_delta_s,
-            "converged": p.converged,
-            "elapsed_time_s": p.elapsed_time_s,
-            "peak_memory_bytes": p.peak_memory_bytes,
-        })
+        rows.append(
+            {
+                "pass_number": p.pass_number,
+                "tetrahedra": p.tetrahedra,
+                "frequency_hz": p.frequency_hz,
+                "frequency_change_fraction": p.frequency_change_fraction,
+                "maximum_delta_s": p.maximum_delta_s,
+                "converged": p.converged,
+                "elapsed_time_s": p.elapsed_time_s,
+                "peak_memory_bytes": p.peak_memory_bytes,
+            }
+        )
     return pd.DataFrame(rows)
 
 

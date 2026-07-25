@@ -6,12 +6,12 @@ Command:
 
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from qresaudit.hashing import sha256_file, write_checksums
-from qresaudit.io.bundle import load_manifest, safe_bundle_path, write_manifest
+from qresaudit.hashing import write_checksums
+from qresaudit.io.bundle import load_manifest, write_manifest
 from qresaudit.models.manifest import HFSSRunManifest
 
 MIGRATION_LOG_NAME = "migration_report.json"
@@ -19,7 +19,7 @@ MIGRATION_LOG_NAME = "migration_report.json"
 
 def _backup_original(bundle: Path) -> Path:
     """Create a timestamped backup of the original bundle."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     backup = bundle.with_name(f"{bundle.name}_v{bundle.stat().st_mtime:.0f}_{ts}.backup")
     if backup.exists():
         shutil.rmtree(backup)
@@ -37,14 +37,19 @@ def _migrate_manifest_0_1_to_0_2(manifest: HFSSRunManifest) -> HFSSRunManifest:
     # Ensure full 128-bit run IDs
     if len(manifest.run_id) != 32:
         from qresaudit.hashing import run_id_for
-        manifest.run_id = run_id_for({
-            "project_sha256": manifest.project_file_sha256,
-            "design": manifest.design_name,
-            "variant": manifest.variation_id,
-        })
+
+        manifest.run_id = run_id_for(
+            {
+                "project_sha256": manifest.project_file_sha256,
+                "design": manifest.design_name,
+                "variant": manifest.variation_id,
+            }
+        )
     # Ensure project hash
     if manifest.project_file_sha256 is None:
-        manifest.project_file_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+        manifest.project_file_sha256 = (
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        )
     return manifest
 
 
@@ -70,7 +75,7 @@ def migrate_bundle(bundle: Path, to_schema: str = "0.2.0") -> Path:
     backup_path = _backup_original(bundle)
 
     report: dict[str, Any] = {
-        "migration_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "migration_timestamp_utc": datetime.now(UTC).isoformat(),
         "source_schema": source_schema,
         "destination_schema": to_schema,
         "source_path": str(bundle),
@@ -86,15 +91,14 @@ def migrate_bundle(bundle: Path, to_schema: str = "0.2.0") -> Path:
             report["steps"].append("manifest schema_version updated to 0.2.0")
             report["steps"].append("run_id strengthened to 128 bits")
         else:
-            raise ValueError(
-                f"no migration path from {source_schema} to {to_schema}"
-            )
+            raise ValueError(f"no migration path from {source_schema} to {to_schema}")
 
         write_manifest(manifest_path, migrated)
         write_checksums(bundle)
 
         # Re-validate
         from qresaudit.validation.engine import validate_bundle
+
         validation = validate_bundle(bundle)
         report["validation_valid"] = validation.valid
         report["validation_diagnostics"] = [

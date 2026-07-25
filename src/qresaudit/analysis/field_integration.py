@@ -10,9 +10,7 @@ Commands:
     qresaudit fields normalize BUNDLE --mode 1 --energy zero-point
 """
 
-import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -26,8 +24,9 @@ EPSILON_0 = 8.8541878128e-12  # F/m
 MU_0 = 4.0 * np.pi * 1e-7  # H/m
 
 
-def cartesian_volume_element(grid_shape: tuple[int, ...],
-                             axis_values: dict[str, np.ndarray]) -> np.ndarray:
+def cartesian_volume_element(
+    grid_shape: tuple[int, ...], axis_values: dict[str, np.ndarray]
+) -> np.ndarray:
     """Compute dV for each cell center in a Cartesian structured grid."""
     dx = axis_values["x"][1] - axis_values["x"][0] if len(axis_values.get("x", [])) > 1 else 0.0
     dy = axis_values["y"][1] - axis_values["y"][0] if len(axis_values.get("y", [])) > 1 else 0.0
@@ -37,20 +36,24 @@ def cartesian_volume_element(grid_shape: tuple[int, ...],
 
 def cylindrical_volume_element(r: np.ndarray, dr: float, dphi: float, dz: float) -> np.ndarray:
     """dV = r * dr * dphi * dz for cylindrical grid."""
-    return np.abs(r) * dr * dphi * dz
+    return np.abs(r) * dr * dphi * dz  # type: ignore[no-any-return]
 
 
 def spherical_volume_element(r: np.ndarray, dr: float, dtheta: float, dphi: float) -> np.ndarray:
     """dV = r² * sin(theta) * dr * dtheta * dphi for spherical grid."""
     theta = np.linspace(0, np.pi, r.shape[1]) if r.ndim > 1 else np.array([np.pi / 2])
     sin_theta = np.sin(theta)
-    return (r ** 2)[:, np.newaxis] * sin_theta[np.newaxis, :] * dr * dtheta * dphi
+    return (r**2)[:, np.newaxis] * sin_theta[np.newaxis, :] * dr * dtheta * dphi  # type: ignore[no-any-return]
 
 
-def compute_energy(coords: np.ndarray, e_field: np.ndarray, h_field: np.ndarray,
-                   dV: np.ndarray | None = None,
-                   epsilon_r: float = 1.0,
-                   mu_r: float = 1.0) -> dict[str, float]:
+def compute_energy(
+    coords: np.ndarray,
+    e_field: np.ndarray,
+    h_field: np.ndarray,
+    dV: np.ndarray | None = None,
+    epsilon_r: float = 1.0,
+    mu_r: float = 1.0,
+) -> dict[str, float]:
     """Compute electric and magnetic energy from field data.
 
     Parameters
@@ -95,9 +98,9 @@ def compute_energy(coords: np.ndarray, e_field: np.ndarray, h_field: np.ndarray,
     }
 
 
-def effective_mode_volume(e_field: np.ndarray, coords: np.ndarray,
-                          dV: np.ndarray | None = None,
-                          epsilon_r: float = 1.0) -> float:
+def effective_mode_volume(
+    e_field: np.ndarray, coords: np.ndarray, dV: np.ndarray | None = None, epsilon_r: float = 1.0
+) -> float:
     """Compute effective mode volume: V_eff = ∫ ε|E|² dV / max(ε|E|²)."""
     if dV is None:
         dV = np.ones(coords.shape[0])
@@ -111,36 +114,45 @@ def effective_mode_volume(e_field: np.ndarray, coords: np.ndarray,
     return total_energy / max_density
 
 
-def normalize_field(e_field: np.ndarray, h_field: np.ndarray,
-                    coords: np.ndarray,
-                    target_energy_j: float,
-                    dV: np.ndarray | None = None,
-                    epsilon_r: float = 1.0,
-                    mu_r: float = 1.0) -> tuple[np.ndarray, np.ndarray, float]:
+def normalize_field(
+    e_field: np.ndarray,
+    h_field: np.ndarray,
+    coords: np.ndarray,
+    target_energy_j: float,
+    dV: np.ndarray | None = None,
+    epsilon_r: float = 1.0,
+    mu_r: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray, float]:
     """Normalize fields to achieve a target total energy.
 
     Returns (E_norm, H_norm, alpha) where alpha is the scaling factor.
     """
     energy = compute_energy(coords, e_field, h_field, dV, epsilon_r, mu_r)
     current_energy = energy["total_energy_j"]
-    if current_energy == 0:
-        alpha = 1.0
-    else:
-        alpha = np.sqrt(target_energy_j / current_energy)
+    alpha = 1.0 if current_energy == 0 else np.sqrt(target_energy_j / current_energy)
     return e_field * alpha, h_field * alpha, float(alpha)
 
 
 # Energy conventions
-ZERO_POINT_ENERGY = lambda omega: 0.5 * HBAR * omega  # ħω/2
-ONE_PHOTON_ENERGY = lambda omega: HBAR * omega          # ħω
-N_PHOTON_ENERGY = lambda omega, n: n * HBAR * omega     # n·ħω
+def ZERO_POINT_ENERGY(omega: float) -> float:
+    return 0.5 * HBAR * omega  # ħω/2
 
 
-def integrate_bundle_fields(bundle: Path,
-                            mode: int | None = None,
-                            region_name: str | None = None,
-                            epsilon_r: float = 1.0,
-                            mu_r: float = 1.0) -> list[FieldIntegrationResult]:
+def ONE_PHOTON_ENERGY(omega: float) -> float:
+    return HBAR * omega  # ħω
+
+
+def N_PHOTON_ENERGY(omega: float, n: float) -> float:
+    return n * HBAR * omega  # n·ħω
+
+
+def integrate_bundle_fields(
+    bundle: Path,
+    mode: int | None = None,
+    region_name: str | None = None,
+    epsilon_r: float = 1.0,
+    mu_r: float = 1.0,
+) -> list[FieldIntegrationResult]:
     """Integrate field energies from a validated bundle."""
     manifest = load_manifest(bundle / "manifest.json")
 
@@ -155,9 +167,9 @@ def integrate_bundle_fields(bundle: Path,
         e_records = [f for f in e_records if f.region_name == region_name]
         h_records = [f for f in h_records if f.region_name == region_name]
 
-    for e_rec, h_rec in zip(e_records, h_records):
+    for e_rec, h_rec in zip(e_records, h_records, strict=False):
         e_coords, e_vals, _, e_meta = read_field_hdf5(safe_bundle_path(bundle, e_rec.path))
-        h_coords, h_vals, _, h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
+        _h_coords, h_vals, _, _h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
 
         # Compute dV from structured grid if available
         dV = None
@@ -166,36 +178,54 @@ def integrate_bundle_fields(bundle: Path,
             shape = [int(s) for s in e_meta.get("shape", [])]
             if len(shape) >= 3:
                 dx = (e_coords[1, 0] - e_coords[0, 0]) if e_coords.shape[0] > 1 else 1.0
-                dV = np.full(e_coords.shape[0], float(dx ** 3))
+                dV = np.full(e_coords.shape[0], float(dx**3))
 
         energy = compute_energy(e_coords, e_vals, h_vals, dV, epsilon_r, mu_r)
         v_eff = effective_mode_volume(e_vals, e_coords, dV, epsilon_r)
 
-        peak_e = float(np.max(np.linalg.norm(e_vals, axis=-1))) if e_vals.ndim == 2 else float(np.max(np.abs(e_vals)))
-        peak_h = float(np.max(np.linalg.norm(h_vals, axis=-1))) if h_vals.ndim == 2 else float(np.max(np.abs(h_vals)))
-        rms_e = float(np.sqrt(np.mean(np.sum(np.abs(e_vals) ** 2, axis=-1)))) if e_vals.ndim == 2 else float(np.sqrt(np.mean(np.abs(e_vals) ** 2)))
-        rms_h = float(np.sqrt(np.mean(np.sum(np.abs(h_vals) ** 2, axis=-1)))) if h_vals.ndim == 2 else float(np.sqrt(np.mean(np.abs(h_vals) ** 2)))
+        peak_e = (
+            float(np.max(np.linalg.norm(e_vals, axis=-1)))
+            if e_vals.ndim == 2
+            else float(np.max(np.abs(e_vals)))
+        )
+        peak_h = (
+            float(np.max(np.linalg.norm(h_vals, axis=-1)))
+            if h_vals.ndim == 2
+            else float(np.max(np.abs(h_vals)))
+        )
+        rms_e = (
+            float(np.sqrt(np.mean(np.sum(np.abs(e_vals) ** 2, axis=-1))))
+            if e_vals.ndim == 2
+            else float(np.sqrt(np.mean(np.abs(e_vals) ** 2)))
+        )
+        rms_h = (
+            float(np.sqrt(np.mean(np.sum(np.abs(h_vals) ** 2, axis=-1))))
+            if h_vals.ndim == 2
+            else float(np.sqrt(np.mean(np.abs(h_vals) ** 2)))
+        )
 
-        results.append(FieldIntegrationResult(
-            region=e_rec.region_name,
-            electric_energy_j=energy["electric_energy_j"],
-            magnetic_energy_j=energy["magnetic_energy_j"],
-            total_energy_j=energy["total_energy_j"],
-            energy_imbalance=float(
-                abs(energy["electric_energy_j"] - energy["magnetic_energy_j"]) /
-                (energy["total_energy_j"] + 1e-30)
-            ),
-            peak_e_field_v_per_m=peak_e,
-            peak_h_field_a_per_m=peak_h,
-            rms_e_field_v_per_m=rms_e,
-            rms_h_field_a_per_m=rms_h,
-            effective_mode_volume_m3=v_eff,
-            filling_factor=0.0,
-            normalization_factor=1.0,
-            target_energy_j=energy["total_energy_j"],
-            grid_resolution_m=[],
-            integration_method="structured" if topology == "structured" else "uniform_dV",
-            jacobian_used=False,
-        ))
+        results.append(
+            FieldIntegrationResult(
+                region=e_rec.region_name,
+                electric_energy_j=energy["electric_energy_j"],
+                magnetic_energy_j=energy["magnetic_energy_j"],
+                total_energy_j=energy["total_energy_j"],
+                energy_imbalance=float(
+                    abs(energy["electric_energy_j"] - energy["magnetic_energy_j"])
+                    / (energy["total_energy_j"] + 1e-30)
+                ),
+                peak_e_field_v_per_m=peak_e,
+                peak_h_field_a_per_m=peak_h,
+                rms_e_field_v_per_m=rms_e,
+                rms_h_field_a_per_m=rms_h,
+                effective_mode_volume_m3=v_eff,
+                filling_factor=0.0,
+                normalization_factor=1.0,
+                target_energy_j=energy["total_energy_j"],
+                grid_resolution_m=[],
+                integration_method="structured" if topology == "structured" else "uniform_dV",
+                jacobian_used=False,
+            )
+        )
 
     return results

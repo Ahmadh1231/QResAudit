@@ -10,16 +10,12 @@ Commands:
     qresaudit loss-estimate BUNDLE --materials materials.yaml
 """
 
-import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import yaml
 
 from qresaudit.analysis.field_integration import (
-    EPSILON_0,
-    MU_0,
     compute_energy,
 )
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
@@ -68,9 +64,9 @@ def compute_participation(
     total_m_energy = 0.0
     total_volume = 0.0
 
-    for e_rec, h_rec in zip(e_records, h_records):
-        e_coords, e_vals, _, e_meta = read_field_hdf5(safe_bundle_path(bundle, e_rec.path))
-        h_coords, h_vals, _, h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
+    for e_rec, h_rec in zip(e_records, h_records, strict=False):
+        e_coords, e_vals, _, _e_meta = read_field_hdf5(safe_bundle_path(bundle, e_rec.path))
+        _h_coords, h_vals, _, _h_meta = read_field_hdf5(safe_bundle_path(bundle, h_rec.path))
 
         region = e_rec.region_name
         material = regions.get(region)
@@ -92,26 +88,32 @@ def compute_participation(
         region_volume = float(np.sum(dV))
         total_volume += region_volume
 
-        participation_results.append(ParticipationResult(
-            region=region,
-            material=material.name if material else "unknown",
-            electric_energy_j=u_e,
-            electric_participation=0.0,  # filled after total known
-            magnetic_energy_j=u_m,
-            magnetic_participation=0.0,
-            loss_tangent_dielectric=tan_delta_e,
-            loss_tangent_magnetic=tan_delta_m,
-            volume_m3=region_volume,
-            point_count=e_coords.shape[0],
-            coverage_fraction=1.0,
-        ))
+        participation_results.append(
+            ParticipationResult(
+                region=region,
+                material=material.name if material else "unknown",
+                electric_energy_j=u_e,
+                electric_participation=0.0,  # filled after total known
+                magnetic_energy_j=u_m,
+                magnetic_participation=0.0,
+                loss_tangent_dielectric=tan_delta_e,
+                loss_tangent_magnetic=tan_delta_m,
+                volume_m3=region_volume,
+                point_count=e_coords.shape[0],
+                coverage_fraction=1.0,
+            )
+        )
 
     total_energy = total_e_energy + total_m_energy
 
     # Compute participation ratios
     for result in participation_results:
-        result.electric_participation = result.electric_energy_j / total_energy if total_energy > 0 else 0.0
-        result.magnetic_participation = result.magnetic_energy_j / total_energy if total_energy > 0 else 0.0
+        result.electric_participation = (
+            result.electric_energy_j / total_energy if total_energy > 0 else 0.0
+        )
+        result.magnetic_participation = (
+            result.magnetic_energy_j / total_energy if total_energy > 0 else 0.0
+        )
 
         # Estimated Q contribution from this region's dielectric loss
         if result.loss_tangent_dielectric > 0:
@@ -121,17 +123,19 @@ def compute_participation(
 
     # Build loss estimate
     dielectric_q_inv = sum(
-        p.electric_participation * p.loss_tangent_dielectric
-        for p in participation_results
+        p.electric_participation * p.loss_tangent_dielectric for p in participation_results
     )
     magnetic_q_inv = sum(
-        p.magnetic_participation * p.loss_tangent_magnetic
-        for p in participation_results
+        p.magnetic_participation * p.loss_tangent_magnetic for p in participation_results
     )
 
     dielectric_q = 1.0 / dielectric_q_inv if dielectric_q_inv > 0 else float("inf")
     magnetic_q = 1.0 / magnetic_q_inv if magnetic_q_inv > 0 else float("inf")
-    total_q = 1.0 / (dielectric_q_inv + magnetic_q_inv) if (dielectric_q_inv + magnetic_q_inv) > 0 else float("inf")
+    total_q = (
+        1.0 / (dielectric_q_inv + magnetic_q_inv)
+        if (dielectric_q_inv + magnetic_q_inv) > 0
+        else float("inf")
+    )
 
     sum_check = sum(p.electric_participation for p in participation_results)
 
@@ -182,8 +186,8 @@ def load_regions_config(path: Path) -> dict[str, MaterialRecord]:
                 magnetic_loss_tangent=float(props.get("magnetic_loss_tangent", 0.0)),
                 bulk_conductivity_s_per_m=float(props.get("bulk_conductivity", 0.0)),
                 is_pec=bool(props.get("is_pec", False)),
-                is_lossy=float(props.get("dielectric_loss_tangent", 0.0)) > 0 or
-                         float(props.get("magnetic_loss_tangent", 0.0)) > 0,
+                is_lossy=float(props.get("dielectric_loss_tangent", 0.0)) > 0
+                or float(props.get("magnetic_loss_tangent", 0.0)) > 0,
             )
     return result
 
@@ -194,8 +198,5 @@ def compute_participation_bundle(
     mode: int | None = None,
 ) -> tuple[list[ParticipationResult], LossEstimate]:
     """Convenience wrapper: load regions from file and compute participation."""
-    if regions_path is not None:
-        regions = load_regions_config(regions_path)
-    else:
-        regions = {}
+    regions = load_regions_config(regions_path) if regions_path is not None else {}
     return compute_participation(bundle, regions, mode=mode)

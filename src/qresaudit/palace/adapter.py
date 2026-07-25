@@ -11,12 +11,9 @@ This adapter reads these outputs and produces a canonical QResAudit bundle.
 """
 
 import csv
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 from qresaudit.hashing import run_id_for, sha256_file, write_checksums
 from qresaudit.io.bundle import prepare_bundle_directories, write_manifest
@@ -25,7 +22,6 @@ from qresaudit.models.common import (
     ExportStatus,
     FieldRepresentation,
     NormalizationKind,
-    PhasorConvention,
     SolutionKind,
 )
 from qresaudit.models.manifest import (
@@ -34,7 +30,6 @@ from qresaudit.models.manifest import (
     FileRecord,
     HFSSRunManifest,
     TouchstoneRecord,
-    VariationValue,
 )
 
 
@@ -52,8 +47,9 @@ def _guess_media_type(path: Path) -> str:
     }.get(ext, "application/octet-stream")
 
 
-def _file_record(path: Path, root: Path, role: str, required: bool,
-                 source_path: str | None = None) -> FileRecord:
+def _file_record(
+    path: Path, root: Path, role: str, required: bool, source_path: str | None = None
+) -> FileRecord:
     return FileRecord(
         path=path.relative_to(root).as_posix(),
         role=role,
@@ -72,12 +68,14 @@ def read_palace_eigenmodes(csv_path: Path) -> list[dict[str, Any]]:
     with csv_path.open() as f:
         reader = csv.DictReader(f)
         for row in reader:
-            modes.append({
-                "mode": int(row.get("m", row.get("mode", 0))),
-                "frequency_real_hz": float(row.get("Freq. (Hz)", row.get("frequency_real", 0))),
-                "frequency_imag_hz": float(row.get("Loss (Hz)", row.get("frequency_imag", 0))),
-                "q_hfss_unloaded": float(row.get("Q", row.get("q", 0))),
-            })
+            modes.append(
+                {
+                    "mode": int(row.get("m", row.get("mode", 0))),
+                    "frequency_real_hz": float(row.get("Freq. (Hz)", row.get("frequency_real", 0))),
+                    "frequency_imag_hz": float(row.get("Loss (Hz)", row.get("frequency_imag", 0))),
+                    "q_hfss_unloaded": float(row.get("Q", row.get("q", 0))),
+                }
+            )
     return modes
 
 
@@ -96,10 +94,12 @@ def read_palace_mesh_stats(mesh_dir: Path) -> dict[str, Any]:
         }
 
 
-def convert_palace_run(palace_output_dir: Path,
-                       output_bundle: Path,
-                       project_name: str = "palace_run",
-                       design_name: str = "default") -> Path:
+def convert_palace_run(
+    palace_output_dir: Path,
+    output_bundle: Path,
+    project_name: str = "palace_run",
+    design_name: str = "default",
+) -> Path:
     """Convert a Palace simulation output directory into a QResAudit bundle.
 
     Parameters
@@ -119,7 +119,7 @@ def convert_palace_run(palace_output_dir: Path,
     """
     prepare_bundle_directories(output_bundle)
     files: list[FileRecord] = []
-    timestamp = datetime.now(timezone.utc)
+    timestamp = datetime.now(UTC)
 
     # Detect solution type
     eigenmode_csv = palace_output_dir / "eigenmode.csv"
@@ -134,10 +134,12 @@ def convert_palace_run(palace_output_dir: Path,
     else:
         raise ValueError("no eigenmode.csv or ports.csv found in Palace output")
 
-    run_id = run_id_for({
-        "project": project_name,
-        "palace_output": str(palace_output_dir.resolve()),
-    })
+    run_id = run_id_for(
+        {
+            "project": project_name,
+            "palace_output": str(palace_output_dir.resolve()),
+        }
+    )
 
     # Eigenmode data
     eigenmode_record = None
@@ -147,6 +149,7 @@ def convert_palace_run(palace_output_dir: Path,
 
         # Write canonical modes CSV
         import pandas as pd
+
         modes_df = pd.DataFrame(modes_data)
         target = output_bundle / "modes" / "eigenmodes.csv"
         modes_df.to_csv(target, index=False)
@@ -166,11 +169,12 @@ def convert_palace_run(palace_output_dir: Path,
             target.write_bytes(snp.read_bytes())
             files.append(_file_record(target, output_bundle, "touchstone", True))
             from qresaudit.io.touchstone import load_network, network_metadata
+
             network = load_network(target)
             metadata = network_metadata(
                 network,
                 target.relative_to(output_bundle).as_posix(),
-                [f"port_{i+1}" for i in range(network.nports)],
+                [f"port_{i + 1}" for i in range(network.nports)],
                 source_file=target,
             )
             touchstone_record = TouchstoneRecord.model_validate(metadata)
@@ -189,25 +193,27 @@ def convert_palace_run(palace_output_dir: Path,
 
             # For now, produce a placeholder HDF5 — full VTU→HDF5 conversion
             # would use vtk/pyvista to extract structured grid data
-            field_records.append(FieldRecord(
-                path=f"fields/raw/{vtu_file.name}",
-                raw_path=f"fields/raw/{vtu_file.name}",
-                quantity="E" if "e_field" in vtu_file.name.lower() else "H",
-                complex_data=False,
-                vector=True,
-                units="V/m",
-                coordinate_units="m",
-                coordinate_system="Global",
-                grid_type="Cartesian",
-                region_name="default",
-                assignment=["AllObjects"],
-                object_type="Vol",
-                solution="palace_solution",
-                normalization=NormalizationKind.USER_SCALED,
-                shape=[0],
-                point_count=0,
-                representation=FieldRepresentation.REAL_GAUGE,
-            ))
+            field_records.append(
+                FieldRecord(
+                    path=f"fields/raw/{vtu_file.name}",
+                    raw_path=f"fields/raw/{vtu_file.name}",
+                    quantity="E" if "e_field" in vtu_file.name.lower() else "H",
+                    complex_data=False,
+                    vector=True,
+                    units="V/m",
+                    coordinate_units="m",
+                    coordinate_system="Global",
+                    grid_type="Cartesian",
+                    region_name="default",
+                    assignment=["AllObjects"],
+                    object_type="Vol",
+                    solution="palace_solution",
+                    normalization=NormalizationKind.USER_SCALED,
+                    shape=[0],
+                    point_count=0,
+                    representation=FieldRepresentation.REAL_GAUGE,
+                )
+            )
 
     # Manifest
     manifest = HFSSRunManifest(

@@ -127,6 +127,7 @@ class BoundaryRecord(StrictModel):
 
 class AnalysisRecord(StrictModel):
     """Structured container for any quantitative analysis result."""
+
     kind: str
     name: str
     value: float | list[float] | None = None
@@ -139,6 +140,7 @@ class AnalysisRecord(StrictModel):
 
 class DiagnosticRecord(StrictModel):
     """Serialisable form of a Diagnostic for audit report inclusion."""
+
     code: str = Field(pattern=r"^[A-Z][A-Z0-9_]+$")
     severity: Severity
     message: str
@@ -151,6 +153,7 @@ class DiagnosticRecord(StrictModel):
 
 class ConvergenceDiagnostic(StrictModel):
     """Complete convergence audit for a single adaptive solution."""
+
     passes: list[AdaptivePassRecord] = Field(default_factory=list)
     total_passes: int = 0
     final_frequency_hz: float | None = None
@@ -176,6 +179,7 @@ class ConvergenceDiagnostic(StrictModel):
 
 class ResonatorFitResult(StrictModel):
     """Result of fitting a resonator model to S-parameter data."""
+
     model: str  # "notch", "peak", "reflection"
     f0_hz: float
     f0_uncertainty_hz: float = 0.0
@@ -363,7 +367,9 @@ class SpinSampleConfig(StrictModel):
     spin_number: float = 0.5
     temperature_k: float = 0.01
     static_b_field_t: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    static_b_field_orientation_euler_deg: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    static_b_field_orientation_euler_deg: list[float] = Field(
+        default_factory=lambda: [0.0, 0.0, 0.0]
+    )
 
 
 class SpinCouplingResult(StrictModel):

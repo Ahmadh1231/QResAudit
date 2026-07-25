@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -11,14 +11,23 @@ from rich.table import Table
 from qresaudit import __version__
 from qresaudit.analysis.audit import audit_bundle, write_audit_output
 from qresaudit.analysis.compare import compare_bundles
-from qresaudit.analysis.convergence import audit_convergence, convergence_summary_json, convergence_to_dataframe
-from qresaudit.analysis.field_integration import integrate_bundle_fields, normalize_field as normalize_field_func
-from qresaudit.analysis.fitting import detect_resonances, fit_bundle_resonator
+from qresaudit.analysis.convergence import (
+    audit_convergence,
+    convergence_summary_json,
+    convergence_to_dataframe,
+)
+from qresaudit.analysis.field_integration import (
+    integrate_bundle_fields,
+)
+from qresaudit.analysis.fitting import fit_bundle_resonator
 from qresaudit.analysis.mode_tracking import track_modes
-from qresaudit.analysis.optimization import bayesian_optimization, fabrication_tolerance_analysis
+from qresaudit.analysis.optimization import bayesian_optimization
 from qresaudit.analysis.participation import compute_participation_bundle
-from qresaudit.analysis.spin_resonator import analyze_spin_coupling, SpinSampleConfig, sweep_parameter
-from qresaudit.io.fields_hdf5 import read_field_hdf5
+from qresaudit.analysis.spin_resonator import (
+    SpinSampleConfig,
+    analyze_spin_coupling,
+    sweep_parameter,
+)
 from qresaudit.models.config import ExportConfig
 from qresaudit.models.manifest import HFSSRunManifest
 from qresaudit.schema_migrate import migrate_bundle
@@ -33,6 +42,7 @@ console = Console()
 
 # ── Top-level flags ────────────────────────────────────────────────────
 
+
 @app.callback()
 def main(
     version: Annotated[bool, typer.Option("--version", help="Show the package version.")] = False,
@@ -44,12 +54,18 @@ def main(
 
 # ── Rendering helpers ──────────────────────────────────────────────────
 
+
 def _render(result: ValidationResult, json_output: bool) -> None:
     if json_output:
-        typer.echo(json.dumps({
-            "valid": result.valid,
-            "diagnostics": [d.model_dump(mode="json") for d in result.diagnostics],
-        }, indent=2))
+        typer.echo(
+            json.dumps(
+                {
+                    "valid": result.valid,
+                    "diagnostics": [d.model_dump(mode="json") for d in result.diagnostics],
+                },
+                indent=2,
+            )
+        )
         return
     table = Table("Severity", "Code", "Path", "Message")
     for item in result.diagnostics:
@@ -70,6 +86,7 @@ def _json_or_print(data: object, json_output: bool) -> None:
 
 
 # ── Phase 1 commands (v0.1.1) ──────────────────────────────────────────
+
 
 @app.command()
 def validate(
@@ -118,6 +135,7 @@ def migrate(
 
 # ── Phase 2: Convergence ───────────────────────────────────────────────
 
+
 @app.command()
 def convergence(
     bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
@@ -129,18 +147,26 @@ def convergence(
     if output:
         output.mkdir(parents=True, exist_ok=True)
         (output / "convergence.json").write_text(
-            json.dumps(convergence_summary_json(diag), indent=2) + "\n", encoding="utf-8")
+            json.dumps(convergence_summary_json(diag), indent=2) + "\n", encoding="utf-8"
+        )
         convergence_to_dataframe(diag).to_csv(output / "convergence.csv", index=False)
         console.print(f"[green]Saved to {output}[/green]")
     if json_output:
         typer.echo(json.dumps(convergence_summary_json(diag), indent=2))
     else:
         console.print(f"Passes: {diag.total_passes} | Converged: {diag.is_converged}")
-        console.print(f"Final max_delta_S: {diag.final_max_delta_s} | False conv risk: {diag.false_convergence_risk}")
-        console.print(f"Extrapolated f0: {diag.limiting_value_extrapolation_hz} +/- {diag.limiting_value_uncertainty_hz}")
+        console.print(
+            f"Final max_delta_S: {diag.final_max_delta_s} | "
+            f"False conv risk: {diag.false_convergence_risk}"
+        )
+        console.print(
+            f"Extrapolated f0: {diag.limiting_value_extrapolation_hz} "
+            f"+/- {diag.limiting_value_uncertainty_hz}"
+        )
 
 
 # ── Phase 2: Resonator Fitting ─────────────────────────────────────────
+
 
 @app.command()
 def fit(
@@ -153,14 +179,22 @@ def fit(
 ) -> None:
     """Fit a resonator model to Touchstone data."""
     result = fit_bundle_resonator(
-        bundle, response=response, model=model,
-        f0_guess=f0_guess, ql_guess=ql_guess,
+        bundle,
+        response=response,
+        model=model,
+        f0_guess=f0_guess,
+        ql_guess=ql_guess,
     )
     if json_output:
         typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
     else:
-        console.print(f"[bold]f0:[/bold] {result.f0_hz/1e9:.6f} GHz +/- {result.f0_uncertainty_hz/1e6:.3f} MHz")
-        console.print(f"[bold]Ql:[/bold] {result.q_loaded:.1f} +/- {result.q_loaded_uncertainty:.1f}")
+        console.print(
+            f"[bold]f0:[/bold] {result.f0_hz / 1e9:.6f} GHz "
+            f"+/- {result.f0_uncertainty_hz / 1e6:.3f} MHz"
+        )
+        console.print(
+            f"[bold]Ql:[/bold] {result.q_loaded:.1f} +/- {result.q_loaded_uncertainty:.1f}"
+        )
         console.print(f"[bold]|Qc|:[/bold] {result.q_coupling_absolute:.1f}")
         console.print(f"[bold]Qi:[/bold] {result.q_internal or float('nan'):.1f}")
         console.print(f"[bold]RMS residual:[/bold] {result.residual_rms:.6f}")
@@ -181,14 +215,21 @@ def mode_track(
     """Track eigenmodes across a parameter sweep directory."""
     branches, crossings = track_modes(sweep_dir, field_pattern=field_pattern)
     if json_output:
-        typer.echo(json.dumps({
-            "branches": [b.model_dump(mode="json") for b in branches],
-            "crossings": [c.model_dump(mode="json") for c in crossings],
-        }, indent=2))
+        typer.echo(
+            json.dumps(
+                {
+                    "branches": [b.model_dump(mode="json") for b in branches],
+                    "crossings": [c.model_dump(mode="json") for c in crossings],
+                },
+                indent=2,
+            )
+        )
     else:
         for branch in branches:
-            console.print(f"Branch {branch.branch_id}: {len(branch.frequencies_hz)} points, "
-                         f"f0 = {branch.frequencies_hz[0]/1e9:.4f} GHz")
+            console.print(
+                f"Branch {branch.branch_id}: {len(branch.frequencies_hz)} points, "
+                f"f0 = {branch.frequencies_hz[0] / 1e9:.4f} GHz"
+            )
         if crossings:
             console.print(f"\n[bold]{len(crossings)} crossings detected[/bold]")
 
@@ -206,13 +247,16 @@ def fields_inspect(
 ) -> None:
     """Inspect field metadata and statistics."""
     manifest = HFSSRunManifest.model_validate_json(
-        (bundle / "manifest.json").read_text(encoding="utf-8"))
+        (bundle / "manifest.json").read_text(encoding="utf-8")
+    )
     for field in manifest.fields:
         if field_path and field_path not in str(field.path):
             continue
-        console.print(f"[bold]{field.quantity}[/bold] mode={field.mode} "
-                     f"f={field.frequency_hz} shape={field.shape} "
-                     f"norm={field.normalization.value} rep={field.representation.value}")
+        console.print(
+            f"[bold]{field.quantity}[/bold] mode={field.mode} "
+            f"f={field.frequency_hz} shape={field.shape} "
+            f"norm={field.normalization.value} rep={field.representation.value}"
+        )
 
 
 @field_app.command("integrate")
@@ -227,9 +271,11 @@ def fields_integrate(
         typer.echo(json.dumps([r.model_dump(mode="json") for r in results], indent=2))
     else:
         for r in results:
-            console.print(f"[bold]{r.region}[/bold]: U={r.total_energy_j:.3e} J, "
-                         f"V_eff={r.effective_mode_volume_m3:.3e} m^3, "
-                         f"imbalance={r.energy_imbalance:.4f}")
+            console.print(
+                f"[bold]{r.region}[/bold]: U={r.total_energy_j:.3e} J, "
+                f"V_eff={r.effective_mode_volume_m3:.3e} m^3, "
+                f"imbalance={r.energy_imbalance:.4f}"
+            )
 
 
 @field_app.command("normalize")
@@ -239,9 +285,11 @@ def fields_normalize(
     energy_convention: Annotated[str, typer.Option("--energy")] = "zero-point",
 ) -> None:
     """Report the normalization factor to reach a target energy convention."""
-    from qresaudit.analysis.field_integration import ZERO_POINT_ENERGY, ONE_PHOTON_ENERGY, HBAR
+    from qresaudit.analysis.field_integration import ONE_PHOTON_ENERGY, ZERO_POINT_ENERGY
+
     manifest = HFSSRunManifest.model_validate_json(
-        (bundle / "manifest.json").read_text(encoding="utf-8"))
+        (bundle / "manifest.json").read_text(encoding="utf-8")
+    )
     e_recs = [f for f in manifest.fields if f.quantity == "E" and f.mode == mode]
     if not e_recs:
         console.print("[red]No E-field found for mode {mode}[/red]")
@@ -256,10 +304,12 @@ def fields_normalize(
     results = integrate_bundle_fields(bundle, mode=mode)
     for r in results:
         alpha = (target / (r.total_energy_j + 1e-30)) ** 0.5
-        console.print(f"{r.region}: α = {alpha:.6e} → target {target:.3e} J ({energy_convention})")
+        alpha_str = f"{r.region}: alpha = {alpha:.6e}"
+        console.print(f"{alpha_str} -> target {target:.3e} J ({energy_convention})")
 
 
 # ── Phase 2: Participation ─────────────────────────────────────────────
+
 
 @app.command()
 def participation(
@@ -276,9 +326,11 @@ def participation(
         console.print(f"[bold]Q_dielectric:[/bold] {loss.dielectric_q or 'N/A'}")
         console.print(f"[bold]Sum check:[/bold] {loss.sum_check:.4f}")
         for p in loss.per_region:
-            console.print(f"  {p.region}: p_e={p.electric_participation:.4f}, "
-                         f"p_m={p.magnetic_participation:.4f}, "
-                         f"Q_contrib={p.estimated_q_contribution or 'N/A'}")
+            console.print(
+                f"  {p.region}: p_e={p.electric_participation:.4f}, "
+                f"p_m={p.magnetic_participation:.4f}, "
+                f"Q_contrib={p.estimated_q_contribution or 'N/A'}"
+            )
 
 
 @app.command()
@@ -297,6 +349,7 @@ def loss_estimate(
 
 
 # ── Phase 2: Bundle Comparison ─────────────────────────────────────────
+
 
 @app.command()
 def compare(
@@ -319,6 +372,7 @@ def compare(
 
 
 # ── Phase 2: Audit Report ──────────────────────────────────────────────
+
 
 @app.command()
 def audit(
@@ -353,6 +407,7 @@ def spin_analyze(
     """Analyze spin-resonator coupling from a bundle."""
     if ensemble:
         import yaml
+
         raw = yaml.safe_load(ensemble.read_text(encoding="utf-8"))
         sample = SpinSampleConfig.model_validate(raw)
     else:
@@ -382,6 +437,7 @@ def spin_sweep(
 ) -> None:
     """Sweep a spin-sample parameter."""
     import numpy as np
+
     values = np.linspace(start, stop, steps).tolist()
     sample = SpinSampleConfig()
     result = sweep_parameter(bundle, sample, parameter, values)
@@ -417,8 +473,10 @@ def optimize_bayesian(
 ) -> None:
     """Run Bayesian optimization from a config file."""
     import yaml
+
     raw = yaml.safe_load(config.read_text(encoding="utf-8"))
     from qresaudit.models.v0_2 import OptimizationObjective
+
     obj = OptimizationObjective.model_validate(raw.get("objective", {}))
     variables = {k: tuple(v) for k, v in raw.get("variables", {}).items()}
     result = bayesian_optimization(obj, variables, n_iterations=iterations)

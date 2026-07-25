@@ -5,10 +5,6 @@ Commands:
     qresaudit optimize bayesian CONFIG --iterations 100
 """
 
-import json
-from pathlib import Path
-from typing import Any
-
 import numpy as np
 
 from qresaudit.models.v0_2 import (
@@ -19,8 +15,7 @@ from qresaudit.models.v0_2 import (
 )
 
 
-def is_dominated(a: OptimizationCandidate, b: OptimizationCandidate,
-                 objectives: list[str]) -> bool:
+def is_dominated(a: OptimizationCandidate, b: OptimizationCandidate, objectives: list[str]) -> bool:
     """Check if candidate 'a' is Pareto-dominated by candidate 'b'.
 
     Returns True if b dominates a (b is better in at least one objective
@@ -38,8 +33,9 @@ def is_dominated(a: OptimizationCandidate, b: OptimizationCandidate,
     return b_better > 0 and a_better == 0
 
 
-def compute_pareto_front(candidates: list[OptimizationCandidate],
-                         objectives: list[str]) -> list[OptimizationCandidate]:
+def compute_pareto_front(
+    candidates: list[OptimizationCandidate], objectives: list[str]
+) -> list[OptimizationCandidate]:
     """Compute the Pareto-optimal front from a list of candidates."""
     n = len(candidates)
     for i in range(n):
@@ -56,9 +52,11 @@ def compute_pareto_front(candidates: list[OptimizationCandidate],
     )
 
 
-def evaluate_candidate(variables: dict[str, float],
-                       objectives: list[OptimizationObjective],
-                       constraints: list[OptimizationConstraint]) -> OptimizationCandidate:
+def evaluate_candidate(
+    variables: dict[str, float],
+    objectives: list[OptimizationObjective],
+    constraints: list[OptimizationConstraint],
+) -> OptimizationCandidate:
     """Evaluate objectives and constraints for a given variable set.
 
     This is a placeholder — in a real run, this would invoke an external
@@ -81,9 +79,9 @@ def evaluate_candidate(variables: dict[str, float],
         except Exception:
             val = float("inf")
         con_vals[con.name] = val
-        if con.kind == "inequality" and val > con.bound + con.tolerance:
-            is_feasible = False
-        elif con.kind == "equality" and abs(val - con.bound) > con.tolerance:
+        inequality_violation = con.kind == "inequality" and val > con.bound + con.tolerance
+        equality_violation = con.kind == "equality" and abs(val - con.bound) > con.tolerance
+        if inequality_violation or equality_violation:
             is_feasible = False
 
     return OptimizationCandidate(
@@ -95,11 +93,12 @@ def evaluate_candidate(variables: dict[str, float],
     )
 
 
-def random_latin_hypercube(n_points: int, bounds: dict[str, tuple[float, float]],
-                           seed: int = 42) -> list[dict[str, float]]:
+def random_latin_hypercube(
+    n_points: int, bounds: dict[str, tuple[float, float]], seed: int = 42
+) -> list[dict[str, float]]:
     """Generate a Latin Hypercube sample of design points."""
     rng = np.random.default_rng(seed)
-    n_dims = len(bounds)
+    len(bounds)
     names = list(bounds)
     samples = []
 
@@ -107,7 +106,7 @@ def random_latin_hypercube(n_points: int, bounds: dict[str, tuple[float, float]]
     segments = np.linspace(0, 1, n_points + 1)
     for i in range(n_points):
         point: dict[str, float] = {}
-        for dim_idx, name in enumerate(names):
+        for _dim_idx, name in enumerate(names):
             lo, hi = bounds[name]
             u = rng.uniform(segments[i], segments[i + 1])
             point[name] = float(lo + u * (hi - lo))
@@ -129,19 +128,16 @@ def bayesian_optimization(
     For a full implementation, scikit-learn or GPy would be used.
     """
     bounds_list = list(variables.values())
-    dims = len(bounds_list)
+    len(bounds_list)
 
     # Initial Latin Hypercube samples
     initial = random_latin_hypercube(n_initial, variables)
-    candidates = [
-        evaluate_candidate(p, [objective], constraints or [])
-        for p in initial
-    ]
+    candidates = [evaluate_candidate(p, [objective], constraints or []) for p in initial]
 
     best = min(candidates, key=lambda c: c.objectives.get(objective.name, float("inf")))
 
     # Simple random search with local refinement as placeholder for full GP-BO
-    for iteration in range(n_iterations - n_initial):
+    for _iteration in range(n_iterations - n_initial):
         # Explore: random candidate
         point: dict[str, float] = {}
         for name, (lo, hi) in variables.items():
@@ -149,10 +145,10 @@ def bayesian_optimization(
 
         candidate = evaluate_candidate(point, [objective], constraints or [])
 
-        if candidate.is_feasible:
-            if candidate.objectives.get(objective.name, float("inf")) < \
-               best.objectives.get(objective.name, float("inf")):
-                best = candidate
+        if candidate.is_feasible and candidate.objectives.get(
+            objective.name, float("inf")
+        ) < best.objectives.get(objective.name, float("inf")):
+            best = candidate
 
         candidates.append(candidate)
 
@@ -201,8 +197,12 @@ def fabrication_tolerance_analysis(
             "std": float(np.std(finite)) if len(finite) > 1 else 0.0,
             "min": float(np.min(finite)) if finite else float("inf"),
             "max": float(np.max(finite)) if finite else float("inf"),
-            "p95": float(np.percentile(finite, 95)) if len(finite) >= 20 else (float(np.max(finite)) if finite else float("inf")),
-            "p5": float(np.percentile(finite, 5)) if len(finite) >= 20 else (float(np.min(finite)) if finite else float("inf")),
+            "p95": float(np.percentile(finite, 95))
+            if len(finite) >= 20
+            else (float(np.max(finite)) if finite else float("inf")),
+            "p5": float(np.percentile(finite, 5))
+            if len(finite) >= 20
+            else (float(np.min(finite)) if finite else float("inf")),
         }
 
     return results

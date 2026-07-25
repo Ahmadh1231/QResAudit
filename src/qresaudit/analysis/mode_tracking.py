@@ -9,18 +9,21 @@ Command:
 """
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from qresaudit.io.fields_hdf5 import read_field_hdf5
-from qresaudit.models.v0_2 import AvoidedCrossing, ModeBranch, ModeOverlapResult
+from qresaudit.models.v0_2 import AvoidedCrossing, ModeBranch
 
 
-def field_overlap(coords_a: np.ndarray, values_a: np.ndarray,
-                  coords_b: np.ndarray, values_b: np.ndarray,
-                  epsilon_r: float = 1.0) -> float:
+def field_overlap(
+    coords_a: np.ndarray,
+    values_a: np.ndarray,
+    coords_b: np.ndarray,
+    values_b: np.ndarray,
+    epsilon_r: float = 1.0,
+) -> float:
     """Compute phase-invariant normalized field overlap integral.
 
     Uses nearest-neighbor interpolation if grids differ.
@@ -30,16 +33,19 @@ def field_overlap(coords_a: np.ndarray, values_a: np.ndarray,
     if len(coords_a) != len(coords_b) or not np.allclose(coords_a, coords_b):
         # Interpolate B onto A's grid
         from scipy.interpolate import NearestNDInterpolator
+
         vector = values_a.ndim == 2 and values_a.shape[1] == 3
         if vector:
             interp_x = NearestNDInterpolator(coords_b, np.real(values_b[:, 0]))
             interp_y = NearestNDInterpolator(coords_b, np.real(values_b[:, 1]))
             interp_z = NearestNDInterpolator(coords_b, np.real(values_b[:, 2]))
-            values_b_interp = np.column_stack([
-                interp_x(*coords_a.T),
-                interp_y(*coords_a.T),
-                interp_z(*coords_a.T),
-            ])
+            values_b_interp = np.column_stack(
+                [
+                    interp_x(*coords_a.T),
+                    interp_y(*coords_a.T),
+                    interp_z(*coords_a.T),
+                ]
+            )
         else:
             interp = NearestNDInterpolator(coords_b, np.real(values_b))
             values_b_interp = interp(*coords_a.T)
@@ -97,16 +103,18 @@ def assign_modes(overlap_matrix: np.ndarray) -> tuple[list[int], float]:
 
     assignments: list[int] = [-1] * overlap_matrix.shape[1]
     confidences: list[float] = [0.0] * overlap_matrix.shape[1]
-    for r, c in zip(row_ind, col_ind):
+    for r, c in zip(row_ind, col_ind, strict=False):
         assignments[c] = int(r)
         confidences[c] = float(overlap_matrix[r, c])
 
     return assignments, float(np.mean(confidences))
 
 
-def detect_crossings(frequencies: dict[int, list[float]],
-                     parameter_values: list[float],
-                     parameter_name: str = "sweep") -> list[AvoidedCrossing]:
+def detect_crossings(
+    frequencies: dict[int, list[float]],
+    parameter_values: list[float],
+    parameter_name: str = "sweep",
+) -> list[AvoidedCrossing]:
     """Detect mode crossings and avoided crossings from frequency vs parameter data.
 
     Parameters
@@ -142,42 +150,44 @@ def detect_crossings(frequencies: dict[int, list[float]],
 
             if min_sep < 1e-6:
                 # True crossing
-                crossings.append(AvoidedCrossing(
-                    parameter_name=parameter_name,
-                    parameter_value=float(parameter_values[min_idx]),
-                    mode_a=int(mode_a),
-                    mode_b=int(mode_b),
-                    minimum_separation_hz=0.0,
-                    coupling_strength_hz=None,
-                ))
+                crossings.append(
+                    AvoidedCrossing(
+                        parameter_name=parameter_name,
+                        parameter_value=float(parameter_values[min_idx]),
+                        mode_a=int(mode_a),
+                        mode_b=int(mode_b),
+                        minimum_separation_hz=0.0,
+                        coupling_strength_hz=None,
+                    )
+                )
             elif min_sep < np.mean(separations) * 0.1:
                 # Potential avoided crossing — estimate coupling
                 # Half the minimum splitting gives the coupling strength
                 coupling = min_sep / 2.0
-                crossings.append(AvoidedCrossing(
-                    parameter_name=parameter_name,
-                    parameter_value=float(parameter_values[min_idx]),
-                    mode_a=int(mode_a),
-                    mode_b=int(mode_b),
-                    minimum_separation_hz=min_sep,
-                    coupling_strength_hz=coupling,
-                ))
+                crossings.append(
+                    AvoidedCrossing(
+                        parameter_name=parameter_name,
+                        parameter_value=float(parameter_values[min_idx]),
+                        mode_a=int(mode_a),
+                        mode_b=int(mode_b),
+                        minimum_separation_hz=min_sep,
+                        coupling_strength_hz=coupling,
+                    )
+                )
 
     return crossings
 
 
-def track_modes(sweep_directory: Path,
-                field_pattern: str = "mode_*_E.h5",
-                parameter_name: str = "sweep") -> tuple[list[ModeBranch], list[AvoidedCrossing]]:
+def track_modes(
+    sweep_directory: Path, field_pattern: str = "mode_*_E.h5", parameter_name: str = "sweep"
+) -> tuple[list[ModeBranch], list[AvoidedCrossing]]:
     """Track eigenmodes across a parameter sweep directory.
 
     Each subdirectory or timestamped subfolder contains fields from one
     sweep point. Fields are matched via overlap maximization.
     """
     # Find all field files grouped by sweep point
-    sweep_points: list[Path] = sorted([
-        p for p in sweep_directory.iterdir() if p.is_dir()
-    ])
+    sweep_points: list[Path] = sorted([p for p in sweep_directory.iterdir() if p.is_dir()])
 
     if not sweep_points:
         raise ValueError(f"no sweep subdirectories found in {sweep_directory}")
@@ -201,33 +211,31 @@ def track_modes(sweep_directory: Path,
 
     # Initialize from first sweep point
     for mode_idx in range(n_modes):
-        coords, values, mag, meta = read_field_hdf5(sweep_field_sets[0][mode_idx])
+        _coords, _values, _mag, meta = read_field_hdf5(sweep_field_sets[0][mode_idx])
         freq = float(meta.get("frequency_hz", 0))
         mode_freqs[mode_idx] = [freq]
         mode_indices[mode_idx] = [mode_idx]
 
     # Track through remaining sweep points
     branches: list[ModeBranch] = []
-    current_assignments = list(range(n_modes))
+    list(range(n_modes))
 
     for point_idx in range(1, n_points):
-        prev_files = sweep_field_sets[point_idx - 1]
+        sweep_field_sets[point_idx - 1]
         curr_files = sweep_field_sets[point_idx]
 
         # Build representative field data per mode at previous point
         overlap = compute_overlap_matrix(curr_files)
 
-        new_assignments, confidence = assign_modes(overlap)
+        new_assignments, _confidence = assign_modes(overlap)
 
         # Map: where does each previous mode go in the current point?
         new_freqs: dict[int, float] = {}
         for curr_idx, prev_idx in enumerate(new_assignments):
-            coords, values, mag, meta = read_field_hdf5(curr_files[curr_idx])
+            _coords, _values, _mag, meta = read_field_hdf5(curr_files[curr_idx])
             freq = float(meta.get("frequency_hz", 0))
             mode_freqs.setdefault(prev_idx, []).append(freq)
             new_freqs[prev_idx] = freq
-
-        current_assignments = new_assignments
 
     # Build mode branches
     for mode_idx, freqs in mode_freqs.items():
@@ -242,7 +250,7 @@ def track_modes(sweep_directory: Path,
 
     # Detect crossings
     # Use sweep point indices as parameter values
-    param_values = list(range(n_points))
+    param_values = [float(i) for i in range(n_points)]
     crossing_list = detect_crossings(mode_freqs, param_values, parameter_name)
 
     return branches, crossing_list

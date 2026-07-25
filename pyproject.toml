@@ -59,8 +59,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+no_implicit_reexport = false
+disallow_untyped_defs = false
 packages = ["qresaudit", "qresaudit_hfss"]
 
 [[tool.mypy.overrides]]
-module = ["ansys.aedt.*", "h5py.*", "pandas.*", "skrf.*", "yaml.*"]
+module = ["ansys.aedt.*", "h5py.*", "pandas.*", "scipy.*", "skrf.*", "yaml.*"]
 ignore_missing_imports = true

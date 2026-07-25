@@ -8,13 +8,12 @@ Command:
     qresaudit fit BUNDLE --response S21 --model notch
 """
 
-import json
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 from scipy.optimize import curve_fit, minimize
 
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
@@ -28,17 +27,30 @@ def _cable_delay_phase(frequency: np.ndarray, delay_ns: float) -> np.ndarray:
     return np.exp(2j * np.pi * frequency * tau)
 
 
-def _background_model(frequency: np.ndarray, slope_real: float, slope_imag: float,
-                      intercept_real: float, intercept_imag: float) -> np.ndarray:
+def _background_model(
+    frequency: np.ndarray,
+    slope_real: float,
+    slope_imag: float,
+    intercept_real: float,
+    intercept_imag: float,
+) -> np.ndarray:
     """Complex linear background: (a + b*f) + j*(c + d*f)."""
     bg_real = slope_real * frequency + intercept_real
     bg_imag = slope_imag * frequency + intercept_imag
     return bg_real + 1j * bg_imag
 
 
-def notch_model(freq: np.ndarray, f0: float, ql: float, qc: float,
-                delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
-                bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+def notch_model(
+    freq: np.ndarray,
+    f0: float,
+    ql: float,
+    qc: float,
+    delay: float = 0.0,
+    bg_real: float = 0.0,
+    bg_imag: float = 0.0,
+    bg_slope_real: float = 0.0,
+    bg_slope_imag: float = 0.0,
+) -> np.ndarray:
     """Notch (transmission dip) resonator model: S21 = 1 - Ql/|Qc| / (1 + 2j Ql (f-f0)/f0).
 
     Parameters
@@ -58,40 +70,59 @@ def notch_model(freq: np.ndarray, f0: float, ql: float, qc: float,
     s21 = 1.0 - (ql / abs(qc)) / (1.0 + 1j * detuning)
     phase = _cable_delay_phase(freq, delay)
     bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
-    return (s21 + bg) * phase
+    return (s21 + bg) * phase  # type: ignore[no-any-return]
 
 
-def peak_model(freq: np.ndarray, f0: float, ql: float, qc: float,
-               delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
-               bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+def peak_model(
+    freq: np.ndarray,
+    f0: float,
+    ql: float,
+    qc: float,
+    delay: float = 0.0,
+    bg_real: float = 0.0,
+    bg_imag: float = 0.0,
+    bg_slope_real: float = 0.0,
+    bg_slope_imag: float = 0.0,
+) -> np.ndarray:
     """Peak (transmission maximum) resonator model."""
     detuning = 2.0 * ql * (freq - f0) / f0
     s21 = (ql / abs(qc)) / (1.0 + 1j * detuning)
     phase = _cable_delay_phase(freq, delay)
     bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
-    return (s21 + bg) * phase
+    return (s21 + bg) * phase  # type: ignore[no-any-return]
 
 
-def reflection_model(freq: np.ndarray, f0: float, ql: float, qc: float,
-                     delay: float = 0.0, bg_real: float = 0.0, bg_imag: float = 0.0,
-                     bg_slope_real: float = 0.0, bg_slope_imag: float = 0.0) -> np.ndarray:
+def reflection_model(
+    freq: np.ndarray,
+    f0: float,
+    ql: float,
+    qc: float,
+    delay: float = 0.0,
+    bg_real: float = 0.0,
+    bg_imag: float = 0.0,
+    bg_slope_real: float = 0.0,
+    bg_slope_imag: float = 0.0,
+) -> np.ndarray:
     """Reflection (S11) resonator model."""
     detuning = 2.0 * ql * (freq - f0) / f0
     s11 = 1.0 - (2.0 * ql / abs(qc)) / (1.0 + 1j * detuning)
     phase = _cable_delay_phase(freq, delay)
     bg = _background_model(freq, bg_slope_real, bg_slope_imag, bg_real, bg_imag)
-    return (s11 + bg) * phase
+    return (s11 + bg) * phase  # type: ignore[no-any-return]
 
 
-def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
-                  response: str = "S21",
-                  model: str = "notch",
-                  f0_guess: float | None = None,
-                  ql_guess: float = 1000.0,
-                  qc_guess: float = 5000.0,
-                  cable_delay_guess_ns: float = 0.0,
-                  use_bootstrap: bool = True,
-                  bootstrap_samples: int = 200) -> ResonatorFitResult:
+def fit_resonator(
+    freq_hz: np.ndarray,
+    s_data: np.ndarray,
+    response: str = "S21",
+    model: str = "notch",
+    f0_guess: float | None = None,
+    ql_guess: float = 1000.0,
+    qc_guess: float = 5000.0,
+    cable_delay_guess_ns: float = 0.0,
+    use_bootstrap: bool = True,
+    bootstrap_samples: int = 200,
+) -> ResonatorFitResult:
     """Fit a resonator model to S-parameter data.
 
     Parameters
@@ -146,32 +177,49 @@ def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
     # Bounds: all parameters should be positive where physically meaningful
     bounds = (
         [freq_hz[0], 1.0, 1.0, -100.0, -np.inf, -np.inf, -np.inf, -np.inf],  # lower
-        [freq_hz[-1], 1e12, 1e12, 100.0, np.inf, np.inf, np.inf, np.inf],      # upper
+        [freq_hz[-1], 1e12, 1e12, 100.0, np.inf, np.inf, np.inf, np.inf],  # upper
     )
 
-    def _wrap_model(f, f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si):
+    def _wrap_model(
+        f: np.ndarray,
+        f0: float,
+        ql: float,
+        qc: float,
+        delay: float,
+        bg_r: float,
+        bg_i: float,
+        bg_sr: float,
+        bg_si: float,
+    ) -> np.ndarray:
         return model_func(f, f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si)
 
-    def _cost(params, f, s_meas):
+    def _cost(params: tuple[float, ...], f: np.ndarray, s_meas: np.ndarray) -> float:
         pred = _wrap_model(f, *params)
         residuals = np.abs(pred - s_meas)
-        return float(np.sum(residuals ** 2))
+        return float(np.sum(residuals**2))
 
     # Curve fitting
     try:
         popt, pcov = curve_fit(
-            _wrap_model, freq_hz, s_flat,
-            p0=p0, bounds=bounds,
-            maxfev=20000, ftol=1e-12, xtol=1e-12,
+            _wrap_model,
+            freq_hz,
+            s_flat,
+            p0=p0,
+            bounds=bounds,
+            maxfev=20000,
+            ftol=1e-12,
+            xtol=1e-12,
         )
         optimizer_converged = True
         optimizer_message = "curve_fit converged"
     except Exception:
         # Fall back to L-BFGS-B via minimize
         result = minimize(
-            _cost, p0, args=(freq_hz, s_flat),
+            _cost,
+            p0,
+            args=(freq_hz, s_flat),
             method="L-BFGS-B",
-            bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1])],
+            bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1], strict=False)],
         )
         popt = result.x
         pcov = None
@@ -202,9 +250,17 @@ def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
     if pcov is not None:
         try:
             perr = np.sqrt(np.diag(pcov))
-            param_names = ["f0_hz", "q_loaded", "q_coupling", "delay_ns",
-                           "bg_r", "bg_i", "bg_sr", "bg_si"]
-            uncertainties = {n: float(v) for n, v in zip(param_names, perr)}
+            param_names = [
+                "f0_hz",
+                "q_loaded",
+                "q_coupling",
+                "delay_ns",
+                "bg_r",
+                "bg_i",
+                "bg_sr",
+                "bg_si",
+            ]
+            uncertainties = {n: float(v) for n, v in zip(param_names, perr, strict=False)}
         except Exception:
             pass
 
@@ -229,7 +285,11 @@ def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
     if use_bootstrap:
         try:
             b_conf = _bootstrap_confidence(
-                _wrap_model, freq_hz, s_flat, popt, bounds,
+                _wrap_model,
+                freq_hz,
+                s_flat,
+                popt,
+                bounds,
                 n_samples=bootstrap_samples,
             )
             bootstrap_conf = b_conf
@@ -266,12 +326,18 @@ def fit_resonator(freq_hz: np.ndarray, s_data: np.ndarray,
         bootstrap_samples=bootstrap_samples if use_bootstrap else 0,
         bootstrap_confidence_95=bootstrap_conf,
         parameter_correlation={},
-        fit_timestamp_utc=datetime.now(timezone.utc),
+        fit_timestamp_utc=datetime.now(UTC),
     )
 
 
-def _bootstrap_confidence(model_func, freq, s_data, popt, bounds,
-                          n_samples: int = 200) -> dict[str, tuple[float, float]]:
+def _bootstrap_confidence(
+    model_func: Callable[..., np.ndarray],
+    freq: np.ndarray,
+    s_data: np.ndarray,
+    popt: tuple[float, ...],
+    bounds: tuple[list[float], list[float]],
+    n_samples: int = 200,
+) -> dict[str, tuple[float, float]]:
     """Estimate 95% confidence intervals via parametric bootstrap."""
     n = len(freq)
     fitted = model_func(freq, *popt)
@@ -288,19 +354,29 @@ def _bootstrap_confidence(model_func, freq, s_data, popt, bounds,
             return float(np.sum(np.abs(pred - s) ** 2))
 
         try:
-            result = minimize(
-                _cost, popt, args=(freq, boot_data),
+            opt_result = minimize(
+                _cost,
+                popt,
+                args=(freq, boot_data),
                 method="L-BFGS-B",
-                bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1])],
+                bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1], strict=False)],
                 options={"maxiter": 500},
             )
-            b_opt = result.x
+            b_opt = opt_result.x
         except Exception:
             continue
 
-        param_names = ["f0_hz", "q_loaded", "q_coupling", "delay_ns",
-                       "bg_r", "bg_i", "bg_sr", "bg_si"]
-        for name, val in zip(param_names, b_opt):
+        param_names = [
+            "f0_hz",
+            "q_loaded",
+            "q_coupling",
+            "delay_ns",
+            "bg_r",
+            "bg_i",
+            "bg_sr",
+            "bg_si",
+        ]
+        for name, val in zip(param_names, b_opt, strict=False):
             param_samples.setdefault(name, []).append(float(val))
 
     result: dict[str, tuple[float, float]] = {}
@@ -312,18 +388,22 @@ def _bootstrap_confidence(model_func, freq, s_data, popt, bounds,
     return result
 
 
-def detect_resonances(freq_hz: np.ndarray, s_mag_db: np.ndarray,
-                      min_depth_db: float = 3.0,
-                      min_separation_hz: float = 1e6) -> list[float]:
+def detect_resonances(
+    freq_hz: np.ndarray,
+    s_mag_db: np.ndarray,
+    min_depth_db: float = 3.0,
+    min_separation_hz: float = 1e6,
+) -> list[float]:
     """Detect resonance frequencies from |S21| in dB.
 
     Returns detected f0 values in Hz.
     """
     # Find local minima
     from scipy.signal import argrelextrema
+
     minima_idx = argrelextrema(s_mag_db, np.less)[0]
 
-    resonances = []
+    resonances: list[float] = []
     for idx in minima_idx:
         # Check depth relative to surrounding
         depth = 0.0
@@ -341,15 +421,18 @@ def detect_resonances(freq_hz: np.ndarray, s_mag_db: np.ndarray,
     return sorted(resonances)
 
 
-def _collect_trace(network, port_out: int, port_in: int) -> np.ndarray:
+def _collect_trace(network: Any, port_out: int, port_in: int) -> np.ndarray:
     """Extract the S(port_out, port_in) trace from a scikit-rf Network."""
     return np.asarray(network.s[:, port_out - 1, port_in - 1])
 
 
-def fit_bundle_resonator(bundle: Path, response: str = "S21",
-                         model: str = "notch",
-                         f0_guess: float | None = None,
-                         **kwargs: Any) -> ResonatorFitResult:
+def fit_bundle_resonator(
+    bundle: Path,
+    response: str = "S21",
+    model: str = "notch",
+    f0_guess: float | None = None,
+    **kwargs: Any,
+) -> ResonatorFitResult:
     """Fit resonator(s) from a validated bundle's Touchstone data."""
     manifest = load_manifest(bundle / "manifest.json")
     if manifest.touchstone is None:

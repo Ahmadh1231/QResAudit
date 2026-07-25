@@ -12,7 +12,7 @@ from qresaudit.models.config import ExportConfig
 from qresaudit.models.manifest import HFSSRunManifest
 
 # Schema 0.2 analysis records
-from qresaudit.models.v0_2 import (  # noqa: F401
+from qresaudit.models.v0_2 import (
     AdaptivePassRecord,
     AnalysisRecord,
     AuditReport,
@@ -45,16 +45,6 @@ from qresaudit.models.v0_2 import (  # noqa: F401
 )
 
 __all__ = [
-    "Diagnostic",
-    "EvidenceProfile",
-    "ExportConfig",
-    "ExportStatus",
-    "FieldRepresentation",
-    "HFSSRunManifest",
-    "NormalizationKind",
-    "PhasorConvention",
-    "Severity",
-    "SolutionKind",
     # Schema 0.2
     "AdaptivePassRecord",
     "AnalysisRecord",
@@ -64,24 +54,34 @@ __all__ = [
     "BoundaryRecord",
     "ComparisonResult",
     "ConvergenceDiagnostic",
+    "Diagnostic",
     "DiagnosticRecord",
+    "EvidenceProfile",
     "ExcitationRecord",
+    "ExportConfig",
+    "ExportStatus",
     "FieldIntegrationResult",
+    "FieldRepresentation",
     "FieldRepresentationRecord",
     "GridRecord",
+    "HFSSRunManifest",
     "LossEstimate",
     "MaterialRecord",
     "MeshStatisticsRecord",
     "ModeBranch",
     "ModeOverlapResult",
+    "NormalizationKind",
     "OptimizationCandidate",
     "OptimizationConstraint",
     "OptimizationObjective",
     "OptimizationResult",
     "ParticipationResult",
+    "PhasorConvention",
     "PortRecord",
     "ReferenceImpedanceRecord",
     "ResonatorFitResult",
+    "Severity",
+    "SolutionKind",
     "SpinCouplingResult",
     "SpinSampleConfig",
     "SpinSweepResult",
