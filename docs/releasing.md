@@ -36,3 +36,7 @@ Both release workflows run `python tools/check_golden.py --require-complete`.
 Production publication is therefore blocked until every required real-solver family
 has complete checksums, expected metrics, and independent manual review. Run the
 command locally before tagging; never replace the evidence with synthetic fixtures.
+
+The **Build documentation** workflow publishes a verified static-site artifact.
+Repository administrators can enable GitHub Pages with GitHub Actions as the source
+and then replace the package's documentation URL with the deployed Pages URL.

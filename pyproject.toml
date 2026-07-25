@@ -60,7 +60,7 @@ dev = [
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "pillow>=12.3"]
 
 [project.urls]
-Documentation = "https://ahmadh1231.github.io/QResAudit/"
+Documentation = "https://github.com/Ahmadh1231/QResAudit/tree/main/docs"
 Issues = "https://github.com/Ahmadh1231/QResAudit/issues"
 Repository = "https://github.com/Ahmadh1231/QResAudit"
 
