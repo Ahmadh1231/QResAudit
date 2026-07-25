@@ -58,6 +58,7 @@ def compute_energy(
     dV: np.ndarray | None = None,
     epsilon_r: float = 1.0,
     mu_r: float = 1.0,
+    phasor_convention: str = "peak",
 ) -> dict[str, float]:
     """Compute electric and magnetic energy from field data.
 
@@ -80,6 +81,10 @@ def compute_energy(
     -------
     dict with keys: electric_energy_j, magnetic_energy_j, total_energy_j
     """
+    if phasor_convention not in {"peak", "rms"}:
+        raise ValueError("phasor_convention must be 'peak' or 'rms'")
+    if epsilon_r <= 0 or mu_r <= 0:
+        raise ValueError("relative permittivity and permeability must be positive")
     if dV is None:
         # Assume 1 m³ per point as fallback
         dV = np.ones(coords.shape[0])
@@ -87,14 +92,17 @@ def compute_energy(
     dV = np.asarray(dV).ravel()
     if len(dV) != coords.shape[0]:
         dV = np.full(coords.shape[0], float(np.mean(dV)))
+    if np.any(~np.isfinite(dV)) or np.any(dV < 0):
+        raise ValueError("volume elements must be finite and non-negative")
+    factor = 0.25 if phasor_convention == "peak" else 0.5
 
     # Electric energy: U_e = (1/2) ε₀ ε_r ∫ |E|² dV
     e_squared = np.sum(np.abs(e_field) ** 2, axis=-1) if e_field.ndim == 2 else np.abs(e_field) ** 2
-    u_e = 0.5 * EPSILON_0 * epsilon_r * float(np.sum(e_squared * dV))
+    u_e = factor * EPSILON_0 * epsilon_r * float(np.sum(e_squared * dV))
 
     # Magnetic energy: U_m = (1/2) μ₀ μ_r ∫ |H|² dV
     h_squared = np.sum(np.abs(h_field) ** 2, axis=-1) if h_field.ndim == 2 else np.abs(h_field) ** 2
-    u_m = 0.5 * MU_0 * mu_r * float(np.sum(h_squared * dV))
+    u_m = factor * MU_0 * mu_r * float(np.sum(h_squared * dV))
 
     return {
         "electric_energy_j": u_e,

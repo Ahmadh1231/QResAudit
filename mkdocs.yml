@@ -1,0 +1,15 @@
+site_name: QResAudit
+site_description: Local-first electromagnetic simulation evidence and analysis
+repo_url: https://github.com/Ahmadh1231/QResAudit
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Getting started: getting_started.md
+  - Stable API: api_stability.md
+  - HFSS workflow: hfss_workflow.md
+  - Resonator analysis: resonator_analysis.md
+  - Field analysis: field_analysis.md
+  - Publication workflow: publication_workflow.md
+  - Bundle format: bundle-format.md
+  - Developer guide: developer_guide.md

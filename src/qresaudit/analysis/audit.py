@@ -168,9 +168,7 @@ def audit_bundle(
         try:
             convergence = audit_convergence(bundle)
             convergence_metric = (
-                "delta-frequency %"
-                if manifest.solution_kind.value == "eigenmode"
-                else "delta-S %"
+                "delta-frequency %" if manifest.solution_kind.value == "eigenmode" else "delta-S %"
             )
             _verdict(
                 verdicts,

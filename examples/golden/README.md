@@ -2,10 +2,13 @@
 
 This directory intentionally contains no synthetic substitute for real HFSS evidence.
 
-Release `v0.1.1` remains blocked until licensed CI publishes and independently checks:
+Research-grade validation remains blocked until licensed CI publishes and independently checks
+the families defined in `CONTRACT.md`:
 
-- `driven_modal/` from a solved Driven Modal project;
-- `eigenmode/` from a solved Eigenmode project.
+- `cpw_resonator/`;
+- `idc_resonator/`;
+- `spiral_resonator/`;
+- `eigenmode_cavity/`.
 
 Each directory must contain the validated bundle, resolved export configuration,
 expected numerical ranges, AEDT/PyAEDT versions, a result screenshot, and an

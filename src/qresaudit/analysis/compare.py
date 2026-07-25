@@ -59,10 +59,7 @@ def compare_bundles(bundle_a: Path, bundle_b: Path) -> ComparisonResult:
         **mb.variation,
         **mb.solved_variation,
     }
-    all_vars = (
-        set(variables_a)
-        | set(variables_b)
-    )
+    all_vars = set(variables_a) | set(variables_b)
     for var in sorted(all_vars):
         va = variables_a.get(var)
         vb = variables_b.get(var)

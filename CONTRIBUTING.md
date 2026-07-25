@@ -1,4 +1,25 @@
 # Contributing
 
-Install `.[dev]`, run `ruff check .`, `mypy src`, and `pytest` before submitting changes.
-Core modules must never import PyAEDT. Licensed tests belong under `tests/hfss_integration`.
+# Contributing
+
+Install `.[dev,docs]`, then run:
+
+```bash
+ruff format --check .
+ruff check .
+mypy src
+pytest
+qresaudit benchmark
+mkdocs build --strict
+python -m build
+python -m twine check dist/*
+```
+
+Core modules must never import PyAEDT, call an LLM, or require network access.
+Licensed tests belong under `tests/hfss_integration`; analytical physics regressions
+belong under `tests/physics`.
+
+New public APIs need typing, documentation, tests, and an entry in `CHANGELOG.md`.
+Only the names in `qresaudit.api` are frozen. Scientific changes must state units,
+conventions, equations or references, acceptance thresholds, and limitations.
+Real solver data must comply with `examples/golden/CONTRACT.md`.

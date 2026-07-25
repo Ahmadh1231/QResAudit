@@ -19,6 +19,7 @@ htmlcov/
 # Build and packaging output
 build/
 dist/
+site/
 *.egg-info/
 
 # Editors and operating systems

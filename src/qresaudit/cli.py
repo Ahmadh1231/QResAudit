@@ -30,6 +30,9 @@ from qresaudit.analysis.spin_resonator import (
     analyze_spin_coupling,
     sweep_parameter,
 )
+from qresaudit.api import analyze_resonator as analyze_resonator_api
+from qresaudit.api import generate_report as generate_report_api
+from qresaudit.benchmarks import run_benchmarks
 from qresaudit.diagnosis import answer_query
 from qresaudit.diagnosis import diagnose as diagnose_data
 from qresaudit.digital_twin import calibrate_resonator
@@ -174,6 +177,47 @@ def migrate(
     """Migrate a bundle to a newer schema version."""
     result = migrate_bundle(bundle, to_schema=to_schema)
     console.print(f"[green]Migrated to {to_schema}:[/green] {result}")
+
+
+@app.command()
+def analyze(
+    bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    response: Annotated[str, typer.Option("--response", "-r")] = "S21",
+    model: Annotated[str, typer.Option("--model", "-m")] = "notch",
+    json_output: Annotated[bool, typer.Option("--json/--no-json")] = True,
+) -> None:
+    """Run the stable local resonator analysis API."""
+    try:
+        result = analyze_resonator_api(bundle, response=response, model=model)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="bundle") from exc
+    _json_or_print(result, json_output)
+
+
+@app.command()
+def report(
+    bundle: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    output: Annotated[Path, typer.Option("--output", "-o")] = Path("report"),
+    regions: Annotated[Path | None, typer.Option("--regions", exists=True)] = None,
+    fit_model: Annotated[str, typer.Option("--fit-model")] = "notch",
+) -> None:
+    """Generate the stable local HTML evidence report and companion artifacts."""
+    html = generate_report_api(bundle, output, regions=regions, fit_model=fit_model)
+    console.print(f"[green]Report generated:[/green] {html.resolve()}")
+
+
+@app.command()
+def benchmark(
+    output: Annotated[Path | None, typer.Option("--output", "-o")] = None,
+) -> None:
+    """Run deterministic analytical checks (not a substitute for solver validation)."""
+    result = run_benchmarks()
+    rendered = json.dumps(result, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered + "\n", encoding="utf-8")
+    typer.echo(rendered)
+    raise typer.Exit(code=0 if result["passed"] else 1)
 
 
 # ── Phase 2: Convergence ───────────────────────────────────────────────

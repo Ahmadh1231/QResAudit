@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a frozen local-only API for validation, loading, resonator analysis, and reports.
+- Replaced magnitude/implicit-complex fitting with bounded complex least squares.
+- Corrected field energy to distinguish peak-phasor (1/4) and RMS (1/2) conventions.
+- Corrected adjacent-sweep mode matching and complex interpolation.
+- Added analytical physics/property benchmarks, stable CLI commands, MkDocs documentation,
+  experimental namespace boundaries, and a formal real-HFSS golden evidence contract.
 - Added release-gated PyPI Trusted Publishing with OIDC, tag/version validation,
   distribution metadata checks, and a clean-wheel smoke test.
 - Fixed the wheel smoke test to install declared dependencies without leaking host

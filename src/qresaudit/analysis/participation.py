@@ -27,6 +27,37 @@ from qresaudit.models.v0_2 import (
 )
 
 
+def normalized_participation(energies: dict[str, float]) -> dict[str, float]:
+    """Normalize non-negative regional energies into participation ratios."""
+    if not energies:
+        raise ValueError("at least one regional energy is required")
+    values = np.asarray(list(energies.values()), dtype=float)
+    if np.any(~np.isfinite(values)) or np.any(values < 0):
+        raise ValueError("regional energies must be finite and non-negative")
+    total = float(np.sum(values))
+    if total <= 0:
+        raise ValueError("total regional energy must be positive")
+    return {name: float(energy / total) for name, energy in energies.items()}
+
+
+def tls_quality_factor(
+    participation: dict[str, float],
+    loss_tangents: dict[str, float],
+) -> float:
+    """Return the TLS-limited Q from ``1/Q = sum(p_i * tan_delta_i)``."""
+    if set(participation) - set(loss_tangents):
+        missing = sorted(set(participation) - set(loss_tangents))
+        raise ValueError(f"missing loss tangents for regions: {', '.join(missing)}")
+    p_values = np.asarray(list(participation.values()), dtype=float)
+    tan_values = np.asarray([loss_tangents[name] for name in participation], dtype=float)
+    if np.any(~np.isfinite(p_values)) or np.any(p_values < 0):
+        raise ValueError("participation ratios must be finite and non-negative")
+    if np.any(~np.isfinite(tan_values)) or np.any(tan_values < 0):
+        raise ValueError("loss tangents must be finite and non-negative")
+    inverse_q = float(np.dot(p_values, tan_values))
+    return float("inf") if inverse_q == 0 else 1.0 / inverse_q
+
+
 def compute_participation(
     bundle: Path,
     regions: dict[str, MaterialRecord],

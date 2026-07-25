@@ -25,6 +25,8 @@ jobs:
       - run: ruff check .
       - run: mypy src
       - run: python tools/check_schemas.py
+      - run: python tools/check_golden.py
+      - run: qresaudit benchmark
       - name: Diagnostic imports
         shell: bash
         run: |
@@ -33,7 +35,7 @@ jobs:
           python -c "from qresaudit.validation import validate_bundle; print('validation OK')"
           python -c "from qresaudit.models.v0_2 import ModeOverlapResult; print('ModeOverlapResult OK')"
       - run: >-
-          pytest tests/unit tests/offline_integration -vv -ra --tb=long
+          pytest tests/unit tests/offline_integration tests/physics -vv -ra --tb=long
           --junitxml=junit.xml
           --cov=qresaudit
           --cov-report=xml
@@ -50,3 +52,14 @@ jobs:
             coverage.xml
             junit.xml
             dist/*
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[docs]"
+      - run: mkdocs build --strict

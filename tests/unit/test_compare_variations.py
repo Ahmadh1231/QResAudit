@@ -19,10 +19,7 @@ def _copy_bundle(tmp_path: Path, name: str) -> Path:
 def _set_variation(bundle: Path, values: dict[str, str]) -> None:
     manifest_path = bundle / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["variation"] = {
-        key: {"expression": value}
-        for key, value in values.items()
-    }
+    manifest["variation"] = {key: {"expression": value} for key, value in values.items()}
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 

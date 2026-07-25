@@ -36,19 +36,16 @@ def field_overlap(
 
         vector = values_a.ndim == 2 and values_a.shape[1] == 3
         if vector:
-            interp_x = NearestNDInterpolator(coords_b, np.real(values_b[:, 0]))
-            interp_y = NearestNDInterpolator(coords_b, np.real(values_b[:, 1]))
-            interp_z = NearestNDInterpolator(coords_b, np.real(values_b[:, 2]))
-            values_b_interp = np.column_stack(
-                [
-                    interp_x(*coords_a.T),
-                    interp_y(*coords_a.T),
-                    interp_z(*coords_a.T),
-                ]
-            )
+            components = []
+            for component in range(3):
+                real_interp = NearestNDInterpolator(coords_b, np.real(values_b[:, component]))
+                imag_interp = NearestNDInterpolator(coords_b, np.imag(values_b[:, component]))
+                components.append(real_interp(*coords_a.T) + 1j * imag_interp(*coords_a.T))
+            values_b_interp = np.column_stack(components)
         else:
-            interp = NearestNDInterpolator(coords_b, np.real(values_b))
-            values_b_interp = interp(*coords_a.T)
+            real_interp = NearestNDInterpolator(coords_b, np.real(values_b))
+            imag_interp = NearestNDInterpolator(coords_b, np.imag(values_b))
+            values_b_interp = real_interp(*coords_a.T) + 1j * imag_interp(*coords_a.T)
     else:
         values_b_interp = values_b
 
@@ -60,8 +57,8 @@ def field_overlap(
         dot = np.conj(values_a) * values_b_interp * epsilon_r
 
     numerator = abs(np.sum(dot))
-    norm_a = np.sqrt(np.sum(np.abs(values_a) ** 2))
-    norm_b = np.sqrt(np.sum(np.abs(values_b_interp) ** 2))
+    norm_a = np.sqrt(epsilon_r * np.sum(np.abs(values_a) ** 2))
+    norm_b = np.sqrt(epsilon_r * np.sum(np.abs(values_b_interp) ** 2))
 
     if norm_a == 0 or norm_b == 0:
         return 0.0
@@ -92,13 +89,38 @@ def compute_overlap_matrix(field_files: list[Path]) -> np.ndarray:
     return overlap
 
 
+def compute_cross_overlap_matrix(
+    previous_field_files: list[Path], current_field_files: list[Path]
+) -> np.ndarray:
+    """Compute overlaps between modes at adjacent sweep points."""
+    previous = [read_field_hdf5(path) for path in previous_field_files]
+    current = [read_field_hdf5(path) for path in current_field_files]
+    overlap = np.zeros((len(previous), len(current)))
+    for i, (coords_a, values_a, _magnitude_a, meta_a) in enumerate(previous):
+        epsilon_r = float(meta_a.get("relative_permittivity", 1.0))
+        for j, (coords_b, values_b, _magnitude_b, _meta_b) in enumerate(current):
+            overlap[i, j] = field_overlap(
+                coords_a,
+                values_a,
+                coords_b,
+                values_b,
+                epsilon_r,
+            )
+    return overlap
+
+
 def assign_modes(overlap_matrix: np.ndarray) -> tuple[list[int], float]:
     """Assign modes between two sweep points via Hungarian algorithm.
 
     Returns (assignment, confidence) where assignment[j] = i means mode j
     in the current sweep point maps to mode i in the previous.
     """
-    cost = 1.0 - np.asarray(overlap_matrix)
+    overlap_matrix = np.asarray(overlap_matrix, dtype=float)
+    if overlap_matrix.ndim != 2 or overlap_matrix.size == 0:
+        raise ValueError("overlap matrix must be a non-empty 2D array")
+    if np.any(~np.isfinite(overlap_matrix)):
+        raise ValueError("overlap matrix must contain finite values")
+    cost = 1.0 - overlap_matrix
     row_ind, col_ind = linear_sum_assignment(cost)
 
     assignments: list[int] = [-1] * overlap_matrix.shape[1]
@@ -218,14 +240,15 @@ def track_modes(
 
     # Track through remaining sweep points
     branches: list[ModeBranch] = []
-    list(range(n_modes))
-
     for point_idx in range(1, n_points):
-        sweep_field_sets[point_idx - 1]
+        previous_files = sweep_field_sets[point_idx - 1]
         curr_files = sweep_field_sets[point_idx]
 
-        # Build representative field data per mode at previous point
-        overlap = compute_overlap_matrix(curr_files)
+        if len(previous_files) != n_modes or len(curr_files) != n_modes:
+            raise ValueError("every sweep point must contain the same number of modes")
+
+        # Compare adjacent sweep points so crossings do not silently reorder branches.
+        overlap = compute_cross_overlap_matrix(previous_files, curr_files)
 
         new_assignments, _confidence = assign_modes(overlap)
 

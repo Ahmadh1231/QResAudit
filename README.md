@@ -40,9 +40,21 @@ Validate a portable bundle:
 
 ```powershell
 qresaudit validate testdata/synthetic/valid_driven_minimal
+qresaudit benchmark
+qresaudit analyze path/to/real/bundle
+qresaudit report path/to/real/bundle --output report
 qresaudit show testdata/synthetic/valid_driven_minimal
 qresaudit schema manifest
 ```
+
+The supported Python surface is intentionally small:
+
+```python
+from qresaudit.api import analyze_resonator, generate_report, load_bundle, validate_bundle
+```
+
+QResAudit runs locally and does not call an LLM or hosted inference service.
+See [`docs/api_stability.md`](docs/api_stability.md) for compatibility guarantees.
 
 Inspect and export a solved project:
 
@@ -97,9 +109,11 @@ behavior and mocked lifecycle safety, not licensed HFSS or cross-solver validati
 ## Testing
 
 ```powershell
+ruff format --check .
 ruff check .
 mypy src
-pytest tests/unit tests/offline_integration --cov=qresaudit
+pytest tests/unit tests/offline_integration tests/physics --cov=qresaudit
+qresaudit benchmark
 ```
 
 ## Publishing
@@ -113,5 +127,6 @@ Licensed tests are marked `hfss` and run only on a private Windows runner with a
 fixture projects. The runner must configure `QRESAUDIT_HFSS_DRIVEN_CONFIG`,
 `QRESAUDIT_HFSS_EIGENMODE_CONFIG`, and, for attachment safety,
 `QRESAUDIT_HFSS_EXISTING_PROCESS_ID`. Missing configuration produces visible skips,
-not passing evidence. No real golden bundle has been published yet, so `v0.1.1`
-remains gated and Phase 2 remains deferred.
+not passing evidence. No real golden bundle has been published yet, so a
+research-grade solver-validation claim remains gated by
+[`examples/golden/CONTRACT.md`](examples/golden/CONTRACT.md).

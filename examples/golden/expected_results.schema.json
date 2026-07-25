@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QResAudit real-solver expected results",
+  "type": "object",
+  "required": [
+    "solver",
+    "solver_version",
+    "project_sha256",
+    "bundle_inventory_sha256",
+    "metrics",
+    "reviewer"
+  ],
+  "properties": {
+    "solver": {"type": "string", "minLength": 1},
+    "solver_version": {"type": "string", "minLength": 1},
+    "project_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bundle_inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "unit", "relative_tolerance"],
+        "properties": {
+          "value": {"type": "number"},
+          "unit": {"type": "string", "minLength": 1},
+          "relative_tolerance": {"type": "number", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "reviewer": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

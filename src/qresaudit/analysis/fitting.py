@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.optimize import curve_fit, minimize
+from scipy.optimize import least_squares, minimize
 
 from qresaudit.io.bundle import load_manifest, safe_bundle_path
 from qresaudit.io.touchstone import load_network
@@ -155,10 +155,20 @@ def fit_resonator(
 
     model_func = {"notch": notch_model, "peak": peak_model, "reflection": reflection_model}[model]
 
+    freq_hz = np.asarray(freq_hz, dtype=float).ravel()
     # Flatten S-data to 1D if needed
     s_flat = np.asarray(s_data).ravel()
     if len(s_flat) != len(freq_hz):
         raise ValueError("S-parameter data length must match frequency axis")
+
+    if len(freq_hz) < 16 or not np.all(np.isfinite(freq_hz)):
+        raise ValueError("at least 16 finite frequency samples are required")
+    if not np.all(np.isfinite(s_flat.real)) or not np.all(np.isfinite(s_flat.imag)):
+        raise ValueError("S-parameter data must be finite")
+    if np.any(np.diff(freq_hz) <= 0):
+        raise ValueError("frequency samples must be strictly increasing")
+    if ql_guess <= 0 or qc_guess <= 0:
+        raise ValueError("Q guesses must be positive")
 
     # Auto-detect f0 from magnitude minimum/maximum
     if f0_guess is None:
@@ -171,13 +181,26 @@ def fit_resonator(
     # Ensure f0_guess is within frequency range
     f0_guess = max(freq_hz[0] + 1.0, min(freq_hz[-1] - 1.0, f0_guess))
 
-    # Initial parameters: f0, ql, qc, delay, bg_real, bg_imag, bg_slope_real, bg_slope_imag
-    p0 = [f0_guess, ql_guess, qc_guess, cable_delay_guess_ns, 0.0, 0.0, 0.0, 0.0]
-
-    # Bounds: all parameters should be positive where physically meaningful
-    bounds = (
-        [freq_hz[0], 1.0, 1.0, -100.0, -np.inf, -np.inf, -np.inf, -np.inf],  # lower
-        [freq_hz[-1], 1e12, 1e12, 100.0, np.inf, np.inf, np.inf, np.inf],  # upper
+    frequency_span = float(freq_hz[-1] - freq_hz[0])
+    baseline = complex(np.mean(np.concatenate((s_flat[:5], s_flat[-5:]))))
+    ideal_baseline = 1.0 if model in {"notch", "reflection"} else 0.0
+    background_guess = baseline - ideal_baseline
+    p0_internal = np.asarray(
+        [
+            f0_guess,
+            np.log(ql_guess),
+            np.log(qc_guess),
+            cable_delay_guess_ns,
+            background_guess.real,
+            background_guess.imag,
+            0.0,
+            0.0,
+        ],
+        dtype=float,
+    )
+    internal_bounds = (
+        np.asarray([freq_hz[0], np.log(1.0), np.log(1.0), -100.0, -10.0, -10.0, -10.0, -10.0]),
+        np.asarray([freq_hz[-1], np.log(1e12), np.log(1e12), 100.0, 10.0, 10.0, 10.0, 10.0]),
     )
 
     def _wrap_model(
@@ -193,38 +216,56 @@ def fit_resonator(
     ) -> np.ndarray:
         return model_func(f, f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si)
 
-    def _cost(params: tuple[float, ...], f: np.ndarray, s_meas: np.ndarray) -> float:
-        pred = _wrap_model(f, *params)
-        residuals = np.abs(pred - s_meas)
-        return float(np.sum(residuals**2))
+    def _unpack_internal(params: np.ndarray) -> np.ndarray:
+        return np.asarray(
+            [
+                params[0],
+                np.exp(params[1]),
+                np.exp(params[2]),
+                params[3],
+                params[4],
+                params[5],
+                params[6] / frequency_span,
+                params[7] / frequency_span,
+            ],
+            dtype=float,
+        )
 
-    # Curve fitting
+    def _complex_residual(params: np.ndarray) -> np.ndarray:
+        prediction = _wrap_model(freq_hz, *_unpack_internal(params))
+        residual = prediction - s_flat
+        return np.concatenate((residual.real, residual.imag))
+
+    fit = least_squares(
+        _complex_residual,
+        p0_internal,
+        bounds=internal_bounds,
+        x_scale=np.asarray(
+            [frequency_span, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            dtype=float,
+        ),
+        max_nfev=50_000,
+        ftol=1e-13,
+        xtol=1e-13,
+        gtol=1e-13,
+    )
+    popt = _unpack_internal(fit.x)
+    pcov = None
+    condition_number = None
     try:
-        popt, pcov = curve_fit(
-            _wrap_model,
-            freq_hz,
-            s_flat,
-            p0=p0,
-            bounds=bounds,
-            maxfev=20000,
-            ftol=1e-12,
-            xtol=1e-12,
+        information = fit.jac.T @ fit.jac
+        condition_number = float(np.linalg.cond(information))
+        residual_degrees_of_freedom = max(1, 2 * len(freq_hz) - len(fit.x))
+        residual_variance = float(np.sum(fit.fun**2) / residual_degrees_of_freedom)
+        covariance_internal = np.linalg.pinv(information) * residual_variance
+        transform = np.diag(
+            [1.0, popt[1], popt[2], 1.0, 1.0, 1.0, 1.0 / frequency_span, 1.0 / frequency_span]
         )
-        optimizer_converged = True
-        optimizer_message = "curve_fit converged"
-    except Exception:
-        # Fall back to L-BFGS-B via minimize
-        result = minimize(
-            _cost,
-            p0,
-            args=(freq_hz, s_flat),
-            method="L-BFGS-B",
-            bounds=[(lo, hi) for lo, hi in zip(bounds[0], bounds[1], strict=False)],
-        )
-        popt = result.x
-        pcov = None
-        optimizer_converged = bool(result.success)
-        optimizer_message = str(result.message)
+        pcov = transform @ covariance_internal @ transform.T
+    except np.linalg.LinAlgError:
+        pass
+    optimizer_converged = bool(fit.success)
+    optimizer_message = str(fit.message)
 
     f0, ql, qc, delay, bg_r, bg_i, bg_sr, bg_si = [float(np.real(v)) for v in popt]
 
@@ -239,7 +280,8 @@ def fit_resonator(
     qc_abs = abs(qc)
     # 1/Qi = 1/Ql - 1/|Qc| for notch; for peak/reflection adjust
     if model == "notch":
-        qi = 1.0 / (1.0 / ql_abs - 1.0 / qc_abs) if ql_abs != qc_abs else float("inf")
+        inverse_q_internal = 1.0 / ql_abs - 1.0 / qc_abs
+        qi = 1.0 / inverse_q_internal if inverse_q_internal > 0 else None
     else:
         qi = ql_abs  # approximate for peak; depends on coupling
 
@@ -270,7 +312,7 @@ def fit_resonator(
 
     # Compute AIC and BIC for model comparison
     n_params = 8
-    n_points = len(freq_hz)
+    n_points = 2 * len(freq_hz)
     rss = float(np.sum(np.abs(residuals) ** 2))
     log_likelihood = -0.5 * n_points * np.log(2 * np.pi * rss / n_points) - 0.5 * n_points
     aic = 2 * n_params - 2 * log_likelihood
@@ -289,7 +331,10 @@ def fit_resonator(
                 freq_hz,
                 s_flat,
                 popt,
-                bounds,
+                (
+                    [freq_hz[0], 1.0, 1.0, -100.0, -10.0, -10.0, -np.inf, -np.inf],
+                    [freq_hz[-1], 1e12, 1e12, 100.0, 10.0, 10.0, np.inf, np.inf],
+                ),
                 n_samples=bootstrap_samples,
             )
             bootstrap_conf = b_conf
@@ -304,7 +349,7 @@ def fit_resonator(
         q_loaded_uncertainty=float(ql_unc),
         q_coupling_absolute=float(qc_abs),
         q_coupling_uncertainty=float(qc_unc),
-        q_internal=float(qi) if np.isfinite(qi) else None,
+        q_internal=float(qi) if qi is not None and np.isfinite(qi) else None,
         q_internal_uncertainty=None,
         coupling_coefficient=float(coupling_coeff) if coupling_coeff is not None else None,
         cable_delay_ns=float(delay),
@@ -315,7 +360,7 @@ def fit_resonator(
         background_intercept_imag=float(bg_i),
         residual_rms=residual_rms,
         residual_max=residual_max,
-        condition_number=None,
+        condition_number=condition_number,
         optimizer_converged=optimizer_converged,
         optimizer_message=optimizer_message,
         chi_squared=chi_sq,
@@ -334,7 +379,7 @@ def _bootstrap_confidence(
     model_func: Callable[..., np.ndarray],
     freq: np.ndarray,
     s_data: np.ndarray,
-    popt: tuple[float, ...],
+    popt: np.ndarray,
     bounds: tuple[list[float], list[float]],
     n_samples: int = 200,
 ) -> dict[str, tuple[float, float]]:
