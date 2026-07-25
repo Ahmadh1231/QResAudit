@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added release-gated PyPI Trusted Publishing with OIDC, tag/version validation,
+  distribution metadata checks, and a clean-wheel smoke test.
+- Fixed the wheel smoke test to install declared dependencies without leaking host
+  site-packages through `PYTHONPATH`.
+
 ## 2.0.0 - 2026-07-25
 
 - Added solver-independent manifests and portable adapters for seven simulation ecosystems.

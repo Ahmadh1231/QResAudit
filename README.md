@@ -93,6 +93,13 @@ mypy src
 pytest tests/unit tests/offline_integration --cov=qresaudit
 ```
 
+## Publishing
+
+Production packages are built and uploaded through secretless PyPI Trusted
+Publishing when a GitHub Release is published. See
+[`docs/releasing.md`](docs/releasing.md) for the protected-environment setup and
+release checklist.
+
 Licensed tests are marked `hfss` and run only on a private Windows runner with approved
 fixture projects. The runner must configure `QRESAUDIT_HFSS_DRIVEN_CONFIG`,
 `QRESAUDIT_HFSS_EIGENMODE_CONFIG`, and, for attachment safety,

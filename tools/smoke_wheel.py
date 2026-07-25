@@ -1,18 +1,19 @@
 """Install the built wheel into a clean virtual environment and smoke the CLIs."""
 
 import os
-import site
 import subprocess
 import sys
 import tempfile
+import tomllib
 import venv
 from pathlib import Path
 
-from qresaudit import __version__
-
 
 def main() -> None:
-    wheels = sorted((Path(__file__).parents[1] / "dist").glob(f"qresaudit-{__version__}-*.whl"))
+    repository = Path(__file__).parents[1]
+    with (repository / "pyproject.toml").open("rb") as handle:
+        version = tomllib.load(handle)["project"]["version"]
+    wheels = sorted((repository / "dist").glob(f"qresaudit-{version}-*.whl"))
     if len(wheels) != 1:
         raise SystemExit(f"expected one wheel in dist, found {len(wheels)}")
     with tempfile.TemporaryDirectory(prefix="qresaudit-wheel-") as directory:
@@ -26,14 +27,13 @@ def main() -> None:
                 "-m",
                 "pip",
                 "install",
-                "--no-deps",
                 str(wheels[0]),
             ],
             check=True,
         )
         suffix = ".exe" if sys.platform == "win32" else ""
         command_environment = os.environ.copy()
-        command_environment["PYTHONPATH"] = os.pathsep.join(site.getsitepackages())
+        command_environment.pop("PYTHONPATH", None)
         for command in ("qresaudit", "qresaudit-hfss"):
             subprocess.run(
                 [str(scripts / f"{command}{suffix}"), "--version"],
