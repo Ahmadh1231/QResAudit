@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "adapter"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": ["string", "null"], "default": null},
+        "adapter": {"type": "string", "minLength": 1}
+      }
+    },
+    "physics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "domains": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "solution_type": {"type": "string", "default": "unknown"}
+      }
+    },
+    "mesh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topology": {"type": "string", "default": "unknown"},
+        "elements": {"type": ["integer", "null"], "minimum": 0},
+        "quality_min": {"type": ["number", "null"]},
+        "quality_mean": {"type": ["number", "null"]}
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quantity", "path", "units", "normalization"],
+      "properties": {
+        "quantity": {"type": "string"},
+        "path": {"type": "string"},
+        "units": {"type": "string"},
+        "normalization": {"type": "string"},
+        "phasor_convention": {"type": "string", "default": "unknown"},
+        "topology": {"type": "string", "default": "unknown"}
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category"],
+      "properties": {
+        "name": {"type": "string"},
+        "category": {"type": "string"},
+        "properties": {
+          "type": "object",
+          "additionalProperties": {"type": ["number", "string"]}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind"],
+      "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "string"},
+        "assignments": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "title": "QResAudit SimulationManifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "solver", "physics"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^2\\.", "default": "2.0.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "solver": {"$ref": "#/$defs/solver"},
+    "physics": {"$ref": "#/$defs/physics"},
+    "provenance": {"type": "object"},
+    "conventions": {"type": "object", "additionalProperties": {"type": "string"}},
+    "mesh": {"oneOf": [{"$ref": "#/$defs/mesh"}, {"type": "null"}]},
+    "fields": {"type": "array", "items": {"$ref": "#/$defs/field"}},
+    "materials": {"type": "array", "items": {"$ref": "#/$defs/material"}},
+    "boundaries": {"type": "array", "items": {"$ref": "#/$defs/boundary"}},
+    "capabilities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": ["PASS", "WARNING", "FAIL", "NOT_EVALUATED"]
+      }
+    },
+    "files": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}

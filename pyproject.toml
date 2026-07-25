@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qresaudit"
-version = "0.2.0"
-description = "Portable extraction and offline validation of solved Ansys HFSS results"
+version = "2.0.0"
+description = "Portable, solver-independent simulation evidence, diagnosis, and resonator analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

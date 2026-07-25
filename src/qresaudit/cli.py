@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from qresaudit import __version__
+from qresaudit.adapters import ADAPTERS
 from qresaudit.analysis.audit import audit_bundle, write_audit_output
 from qresaudit.analysis.compare import compare_bundles
 from qresaudit.analysis.convergence import (
@@ -28,6 +29,8 @@ from qresaudit.analysis.spin_resonator import (
     analyze_spin_coupling,
     sweep_parameter,
 )
+from qresaudit.diagnosis import answer_query
+from qresaudit.diagnosis import diagnose as diagnose_data
 from qresaudit.models.config import ExportConfig
 from qresaudit.models.manifest import HFSSRunManifest
 from qresaudit.schema_migrate import migrate_bundle
@@ -39,6 +42,35 @@ app = typer.Typer(
     help="Portable HFSS evidence validation, analysis, and audit.",
 )
 console = Console()
+
+
+@app.command("diagnose-data")
+def diagnose_data_command(
+    input_json: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    query: Annotated[str | None, typer.Option("--query")] = None,
+) -> None:
+    """Run deterministic v2 diagnosis on a JSON evidence summary."""
+    data = json.loads(input_json.read_text(encoding="utf-8"))
+    findings = diagnose_data(data)
+    if query:
+        typer.echo(answer_query(findings, query))
+    else:
+        typer.echo(json.dumps([f.__dict__ for f in findings], indent=2))
+
+
+@app.command("import-manifest")
+def import_manifest(
+    solver: Annotated[
+        str, typer.Argument(help="hfss, palace, comsol, cst, sonnet, openems, or elmer")
+    ],
+    source: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+) -> None:
+    """Import a portable solver bundle without running a solver."""
+    if solver not in ADAPTERS:
+        raise typer.BadParameter(f"unsupported adapter: {solver}")
+    manifest = ADAPTERS[solver].import_bundle(source)
+    typer.echo(manifest.model_dump_json(indent=2))
+
 
 # ── Top-level flags ────────────────────────────────────────────────────
 

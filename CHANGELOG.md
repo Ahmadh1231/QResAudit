@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0 - 2026-07-25
+
+- Added solver-independent manifests and portable adapters for seven simulation ecosystems.
+- Added deterministic diagnosis, measurement comparison, quantum estimates, fabrication yield,
+  local surrogates, reproducibility packages, offline job artifacts, and benchmarks.
+- Preserved explicit missing-evidence and solver-provenance boundaries.
+
 ## 0.1.1 - 2026-07-23
 
 - Stabilized read-only AEDT lifecycle handling and offline bundle validation.

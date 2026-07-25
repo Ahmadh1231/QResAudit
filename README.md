@@ -1,12 +1,12 @@
-# QResAudit
+# QResAudit v2
 
 [![CI](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml/badge.svg)](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml)
 
-QResAudit exports solved Ansys HFSS evidence into a portable bundle and validates that
-bundle without AEDT, PyAEDT, or an Ansys license. Version 0.1 targets HFSS 3D Driven
-Modal and Eigenmode results. Driven Terminal export is intentionally disabled
-until terminal/reference-conductor provenance is modeled. Version 0.1.1 is an
-unreleased offline/schema stabilization candidate.
+QResAudit turns electromagnetic simulation and measurement evidence into portable,
+auditable research records. The validated HFSS evidence/export boundary remains the
+v1 foundation; v2 adds solver-neutral manifests and offline research engines for
+diagnosis, design, digital twins, quantum-device estimates, fabrication variation,
+surrogates, reproducibility packages, and execution artifacts.
 
 ## Architecture
 
@@ -67,13 +67,23 @@ Evidence requirements are explicit:
 - `standard`: primary evidence plus convergence and mesh statistics;
 - `strict`: standard evidence plus fields required by the solution contract.
 
+## v2 capabilities and evidence boundary
+
+The portable v2 core supports manifest-based imports for HFSS, Palace, COMSOL, CST,
+Sonnet, openEMS, and Elmer; deterministic diagnosis; measurement comparison;
+quantum-device estimates; fabrication yield; local surrogate and inverse-design
+models; reproducibility packages; offline Slurm/AWS/cluster job artifacts; and
+benchmarks. Adapters describe capabilities and missing evidence rather than
+fabricating solver results. Tests do not contact solvers, cloud, or HPC systems.
+Reports state when only local rules were used.
+
 ## Limitations
 
-QResAudit audits evidence; it does not prove the model is physically correct. Version
-0.1.1 intentionally excludes Q fitting, participation ratios, photon normalization,
-spin coupling, dashboards, and non-HFSS solvers. Real-gauge eigenmode fields are
-accepted; driven fields require explicit frequency and excitation context. Public CI
-proves offline behavior and mocked lifecycle safety, not real HFSS validation.
+QResAudit audits evidence; it does not prove a model is physically correct. Portable
+adapters ingest exported files and manifests, not proprietary solver databases.
+Quantum-circuit functions are documented analytic approximations, and surrogate
+predictions are only as credible as their training evidence. Public CI proves offline
+behavior and mocked lifecycle safety, not licensed HFSS or cross-solver validation.
 
 ## Testing
 
