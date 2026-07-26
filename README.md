@@ -1,11 +1,12 @@
 # QResAudit v2
 
 [![CI](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml/badge.svg)](https://github.com/Ahmadh1231/QResAudit/actions/workflows/core-ci.yml)
-[![Documentation](https://github.com/Ahmadh1231/QResAudit/actions/workflows/docs.yml/badge.svg)](https://ahmadh1231.github.io/QResAudit/)
+[![Documentation](https://github.com/Ahmadh1231/QResAudit/actions/workflows/docs.yml/badge.svg)](https://github.com/Ahmadh1231/QResAudit/actions/workflows/docs.yml)
 
 QResAudit turns electromagnetic simulation and measurement evidence into portable,
-auditable research records. The validated HFSS evidence/export boundary remains the
-v1 foundation; v2 adds solver-neutral manifests and offline research engines for
+auditable research records. The HFSS evidence/export boundary remains the v1
+foundation; real-solver validation claims remain separately gated. V2 adds
+solver-neutral manifests and offline research engines for
 diagnosis, design, digital twins, quantum-device estimates, fabrication variation,
 surrogates, reproducibility packages, and execution artifacts.
 
@@ -56,6 +57,8 @@ from qresaudit.api import analyze_resonator, generate_report, load_bundle, valid
 
 QResAudit runs locally and does not call an LLM or hosted inference service.
 See [`docs/api_stability.md`](docs/api_stability.md) for compatibility guarantees.
+The source distribution contains no proprietary project, geometry, solved result, or
+institutional design. Researchers provide their own evidence bundles locally.
 
 Inspect and export a solved project:
 
@@ -131,3 +134,4 @@ fixture projects. The runner must configure `QRESAUDIT_HFSS_DRIVEN_CONFIG`,
 not passing evidence. No real golden bundle has been published yet, so a
 research-grade solver-validation claim remains gated by
 [`examples/golden/CONTRACT.md`](examples/golden/CONTRACT.md).
+Package publication is not a claim that this independent evidence gate has passed.

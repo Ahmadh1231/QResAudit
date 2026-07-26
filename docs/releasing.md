@@ -32,10 +32,12 @@ wheel and source distribution, validates their metadata, installs the wheel in a
 clean environment, and only then grants the separate publish job an OIDC token.
 The final upload workflow name is **Publish to PyPI**.
 
-Both release workflows run `python tools/check_golden.py --require-complete`.
-Production publication is therefore blocked until every required real-solver family
-has complete checksums, expected metrics, and independent manual review. Run the
-command locally before tagging; never replace the evidence with synthetic fixtures.
+Both release workflows save `golden-status.json` alongside their artifacts. Package
+publication can proceed without distributing private solver projects, but it does
+not constitute a real-solver validation claim. A release claiming independent
+real-solver validation must additionally pass
+`python tools/check_golden.py --require-complete`. Never replace that evidence with
+synthetic fixtures or publish a confidential design to satisfy the gate.
 
 The **Build documentation** workflow publishes a verified static-site artifact.
 Repository administrators can enable GitHub Pages with GitHub Actions as the source

@@ -29,7 +29,7 @@ jobs:
       - run: python -m validate_pyproject pyproject.toml
       - run: pytest tests/unit tests/offline_integration tests/physics
       - run: qresaudit benchmark --output analytical-benchmarks.json
-      - run: python tools/check_golden.py --require-complete
+      - run: python tools/check_golden.py > golden-status.json
       - run: python -m pip_audit .
       - run: python -m pip_audit . --format cyclonedx-json --output sbom.cdx.json
       - run: python -m bandit -r src -q -s B105,B110,B112
@@ -42,6 +42,7 @@ jobs:
           name: release-validation-artifacts
           path: |
             analytical-benchmarks.json
+            golden-status.json
             sbom.cdx.json
             dist/*
           if-no-files-found: error

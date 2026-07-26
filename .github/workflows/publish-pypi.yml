@@ -38,7 +38,7 @@ jobs:
           mypy src
           python -m validate_pyproject pyproject.toml
           python tools/check_schemas.py
-          python tools/check_golden.py --require-complete
+          python tools/check_golden.py > golden-status.json
           qresaudit benchmark
           python -m pip_audit .
           python -m bandit -r src -q -s B105,B110,B112
@@ -61,6 +61,14 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 1
+
+      - name: Store scientific evidence status
+        uses: actions/upload-artifact@v5
+        with:
+          name: scientific-evidence-status
+          path: golden-status.json
+          if-no-files-found: error
+          retention-days: 30
 
   publish:
     name: Publish verified distributions

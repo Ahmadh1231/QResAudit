@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.0.0 - 2026-07-25
+
 - Removed silent unit-volume, cubic-grid, field-order, one-cubic-meter sample, and
   assumed-cavity-Q fallbacks from field, participation, mode, comparison, and spin analysis.
 - Added nonuniform 3D quadrature, persistent mode-branch identity, safe report escaping,
@@ -16,8 +18,6 @@
   distribution metadata checks, and a clean-wheel smoke test.
 - Fixed the wheel smoke test to install declared dependencies without leaking host
   site-packages through `PYTHONPATH`.
-
-## 2.0.0 - 2026-07-25
 
 - Added solver-independent manifests and portable adapters for seven simulation ecosystems.
 - Added deterministic diagnosis, measurement comparison, quantum estimates, fabrication yield,
