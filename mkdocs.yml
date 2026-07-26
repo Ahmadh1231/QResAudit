@@ -18,5 +18,6 @@ nav:
   - V2 platform: v2-platform.md
   - V4 platform: v4-platform.md
   - Releasing: releasing.md
+  - v2.0.0 Release Notes: release-notes-v2.0.0.md
   - Developer guide: developer_guide.md
   - Exporter developer guide: developer-guide.md
