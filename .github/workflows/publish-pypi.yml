@@ -3,6 +3,12 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
+  workflow_run:
+    workflows: ["Release validation"]
+    types: [completed]
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.event.workflow_run.head_branch }}
 
 permissions:
   contents: read
@@ -10,13 +16,17 @@ permissions:
 jobs:
   build:
     name: Build and verify distributions
+    if: >-
+      github.event_name == 'release' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: actions/setup-python@v6
         with:
@@ -29,7 +39,7 @@ jobs:
       - name: Verify release tag matches package version
         run: >-
           python tools/check_release_version.py
-          --tag "${{ github.event.release.tag_name }}"
+          --tag "${{ env.RELEASE_TAG }}"
 
       - name: Run release quality gates
         run: |
