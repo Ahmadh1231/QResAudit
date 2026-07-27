@@ -1,0 +1,14 @@
+{
+  "center_conductor_width_m": 1e-05,
+  "classification": "analytic synthetic demonstration; not solver validation",
+  "device": "quarter-wave coplanar-waveguide resonator",
+  "effective_permittivity": 6.0,
+  "feedline_impedance_ohm": 50.0,
+  "frequency_target_hz": 6000000000.0,
+  "gap_m": 6e-06,
+  "model": "lossy analytic notch response",
+  "q_coupling": 8000.0,
+  "q_internal": 13333.333333333332,
+  "q_loaded": 5000.0,
+  "resonator_length_m": 0.005099573269685811
+}

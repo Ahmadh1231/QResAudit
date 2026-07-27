@@ -26,3 +26,18 @@ if result.valid:
 
 For HFSS export, install `qresaudit[hfss]` on the machine that has AEDT. Analysis
 of the resulting bundle remains portable and offline.
+
+## Run the public demo
+
+The repository contains an original analytic quarter-wave CPW resonator fixture.
+It is synthetic and solver-free, so it demonstrates the complete local workflow
+without distributing a private design or making a real-HFSS validation claim.
+
+```powershell
+qresaudit validate examples/demo_resonator/bundle
+qresaudit analyze examples/demo_resonator/bundle
+qresaudit report examples/demo_resonator/bundle --output demo-report
+```
+
+The generated HTML report is `demo-report/report.html`. The declared analytic
+targets and tolerances are in `examples/demo_resonator/expected_output.json`.

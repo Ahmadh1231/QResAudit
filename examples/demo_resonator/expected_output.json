@@ -1,0 +1,19 @@
+{
+  "classification": "analytic synthetic demo; not HFSS or real-solver validation",
+  "fit": {
+    "frequency_hz": 6000000000.0,
+    "frequency_tolerance_fraction": 1e-05,
+    "model": "notch",
+    "q_coupling": 8000.0,
+    "q_coupling_tolerance_fraction": 0.01,
+    "q_internal": 13333.333333333332,
+    "q_internal_tolerance_fraction": 0.02,
+    "q_loaded": 5000.0,
+    "q_loaded_tolerance_fraction": 0.01,
+    "response": "S21"
+  },
+  "validation": {
+    "expected_valid": true,
+    "strict": true
+  }
+}

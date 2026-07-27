@@ -1,0 +1,6 @@
+pass_number,frequency_hz,max_delta_s_percent,converged
+1,6008000000,0.5,false
+2,6003000000,0.2,false
+3,6001000000,0.08,false
+4,6000200000,0.0495,false
+5,6000000000,0.049,true

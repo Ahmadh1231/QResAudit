@@ -1,0 +1,298 @@
+{
+  "aedt_version": "not used",
+  "bundle_status": "complete",
+  "design_name": "SyntheticQuarterWaveCPW",
+  "design_type": "analytic synthetic fixture",
+  "design_variables": {},
+  "diagnostics": [],
+  "eigenmode": null,
+  "evidence_profile": "strict",
+  "export_timestamp_utc": "2026-07-27T00:00:00Z",
+  "exporter_version": "2.0.0",
+  "fields": [
+    {
+      "assignment": [
+        "analytic_domain"
+      ],
+      "axis_order": [
+        "x",
+        "y",
+        "z"
+      ],
+      "complex_data": true,
+      "component_labels": [
+        "x",
+        "y",
+        "z"
+      ],
+      "coordinate_system": "Global",
+      "coordinate_units": "m",
+      "excitation": "analytic_port_1",
+      "flattening_order": "C",
+      "frequency_hz": 6000000000.0,
+      "grid_type": "Cartesian",
+      "mode": null,
+      "normalization": "user_scaled",
+      "object_type": "Vol",
+      "path": "fields/hdf5/resonator_E.h5",
+      "phase_deg": 0.0,
+      "phasor_convention": "exp_positive_iwt_peak",
+      "point_count": 135,
+      "quantity": "E",
+      "raw_path": "fields/raw/resonator_E.fld",
+      "region_name": "cpw_resonator_domain",
+      "representation": "complex_phasor",
+      "shape": [
+        5,
+        9,
+        3,
+        3
+      ],
+      "solution": "AnalyticNotch : Sweep",
+      "topology": "structured",
+      "units": "V/m",
+      "variation": {},
+      "vector": true
+    },
+    {
+      "assignment": [
+        "analytic_domain"
+      ],
+      "axis_order": [
+        "x",
+        "y",
+        "z"
+      ],
+      "complex_data": true,
+      "component_labels": [
+        "x",
+        "y",
+        "z"
+      ],
+      "coordinate_system": "Global",
+      "coordinate_units": "m",
+      "excitation": "analytic_port_1",
+      "flattening_order": "C",
+      "frequency_hz": 6000000000.0,
+      "grid_type": "Cartesian",
+      "mode": null,
+      "normalization": "user_scaled",
+      "object_type": "Vol",
+      "path": "fields/hdf5/resonator_H.h5",
+      "phase_deg": 0.0,
+      "phasor_convention": "exp_positive_iwt_peak",
+      "point_count": 135,
+      "quantity": "H",
+      "raw_path": "fields/raw/resonator_H.fld",
+      "region_name": "cpw_resonator_domain",
+      "representation": "complex_phasor",
+      "shape": [
+        5,
+        9,
+        3,
+        3
+      ],
+      "solution": "AnalyticNotch : Sweep",
+      "topology": "structured",
+      "units": "A/m",
+      "variation": {},
+      "vector": true
+    }
+  ],
+  "files": [
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/json",
+      "path": "analytic_design.json",
+      "required": true,
+      "role": "configuration",
+      "sha256": "667f2d9f5059c31e9a9d979cf849f8ad3157ec470423ba436a5d5d7daa04301d",
+      "size_bytes": 486,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/json",
+      "path": "design_variables.json",
+      "required": true,
+      "role": "design_variables",
+      "sha256": "f86020fd5e625145c4c52da7acec61bb4be1101cd2b29b42cffa833974ef27f8",
+      "size_bytes": 333,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/json",
+      "path": "project_variables.json",
+      "required": true,
+      "role": "project_variables",
+      "sha256": "e3566b3a06430868d71e9287dfd6c6c520a3da027aabea01951d407ee131dc2f",
+      "size_bytes": 4,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "export_config.resolved.yaml",
+      "required": true,
+      "role": "configuration",
+      "sha256": "cbf77448dd10ec84c34bddd373c72671f6c2f2c11d44a0217072c5e5a6416165",
+      "size_bytes": 82,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "text/csv",
+      "path": "convergence/adaptive_passes.csv",
+      "required": true,
+      "role": "convergence",
+      "sha256": "80db17531407b3b84d0d2acd6ced10d0caf9f2b41c520c4c62b51119331f7c31",
+      "size_bytes": 181,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "convergence/convergence_raw.prof",
+      "required": true,
+      "role": "convergence",
+      "sha256": "7253908412a44697b76d8ce8ebd28a6194a6a6f31c073007b1cc2b78899ce4bf",
+      "size_bytes": 98,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "text/csv",
+      "path": "mesh/mesh.csv",
+      "required": true,
+      "role": "mesh",
+      "sha256": "55b4cfc44944db2b7725d0b0e77d78793673d1c4971e277da9720b21ee6e32fd",
+      "size_bytes": 107,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "convergence/mesh_stats_raw.txt",
+      "required": true,
+      "role": "mesh_stats",
+      "sha256": "ffacff453ccc5ee9fc0c2d849400c393dc87ab39ab161c0fa47f8e16986a1496",
+      "size_bytes": 80,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "network/network.s2p",
+      "required": true,
+      "role": "touchstone",
+      "sha256": "ceebea1bce17b796d78a99d60ed73fc665ad1de43d286c0d7afd0cf4e084acd1",
+      "size_bytes": 122517,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "text/csv",
+      "path": "reports/s_parameters.csv",
+      "required": true,
+      "role": "s_parameters",
+      "sha256": "d16d24dd5b4878cb36e39b0703e47bebeb00b1eb11f95321eb5811fce4abef39",
+      "size_bytes": 122486,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "fields/raw/resonator_E.fld",
+      "required": true,
+      "role": "field_raw",
+      "sha256": "df9bf57495ec48ceb0c23a3a72bbb653a721a7e185dc47fb85fd9a9eb1abe652",
+      "size_bytes": 10899,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "fields/hdf5/resonator_E.h5",
+      "required": true,
+      "role": "field_hdf5",
+      "sha256": "ef8b666e80885dfbbaf5844a90fd19e663fcd3f6e63870ccf200a4cf20fe8857",
+      "size_bytes": 32256,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "fields/raw/resonator_H.fld",
+      "required": true,
+      "role": "field_raw",
+      "sha256": "06d93970eb1250f7b20dc37a3c99c46fd00ee2571bc4364a04df0e6655cac666",
+      "size_bytes": 11338,
+      "source_path": null
+    },
+    {
+      "generated_by": "tools/generate_demo_resonator.py",
+      "media_type": "application/octet-stream",
+      "path": "fields/hdf5/resonator_H.h5",
+      "required": true,
+      "role": "field_hdf5",
+      "sha256": "9a39bf4d73de9aae2b14fcebe0a2bbd608342f0eb03e9bcf320421dca7bb2c40",
+      "size_bytes": 32256,
+      "source_path": null
+    }
+  ],
+  "model_units": "m",
+  "operating_system": "platform independent",
+  "ports": [
+    "input",
+    "output"
+  ],
+  "project_file_name": "analytic_design.json",
+  "project_file_sha256": "667f2d9f5059c31e9a9d979cf849f8ad3157ec470423ba436a5d5d7daa04301d",
+  "project_name": "qresaudit_public_demo",
+  "project_variables": {},
+  "pyaedt_version": "not used",
+  "python_version": "3.11+",
+  "reference_coordinate_system": "Global",
+  "run_id": "7879d647ea01b7683e754cadd86e0e9f",
+  "schema_version": "0.1.1",
+  "setup_name": "AnalyticNotch",
+  "solution_kind": "driven_modal",
+  "solution_reference": "AnalyticNotch : Sweep",
+  "solved_variation": {},
+  "sweep_name": "Sweep",
+  "touchstone": {
+    "data_format": "RI",
+    "frequency_max_hz": 6030000000.0,
+    "frequency_min_hz": 5970000000.0,
+    "frequency_unit": "Hz",
+    "header_reference_impedance_ohm": 50.0,
+    "matrix_format": "full",
+    "number_of_ports": 2,
+    "parameter_type": "S",
+    "path": "network/network.s2p",
+    "point_count": 1201,
+    "port_names": [
+      "input",
+      "output"
+    ],
+    "port_order_verified": true,
+    "reference_impedance_imag_ohm": [],
+    "reference_impedance_ohm": 50.0,
+    "reference_impedance_real_ohm": [],
+    "renormalization_impedance_ohm": null,
+    "renormalized": false,
+    "source_excitation_names": [
+      "input",
+      "output"
+    ],
+    "source_impedance_path": null,
+    "source_impedance_preserved": true,
+    "source_reference_impedance_imag_ohm": [],
+    "source_reference_impedance_real_ohm": [],
+    "touchstone_version": "1.0",
+    "wave_definition": "power"
+  },
+  "variation": {},
+  "variation_id": "nominal"
+}

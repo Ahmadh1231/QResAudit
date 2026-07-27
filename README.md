@@ -38,10 +38,23 @@ graphically; set `student_version: true` and `non_graphical: false`.
 
 ## Quick start
 
-Validate a portable bundle:
+From a source checkout, run the original, solver-free quarter-wave CPW demo:
 
 ```powershell
-qresaudit validate testdata/synthetic/valid_driven_minimal
+qresaudit validate examples/demo_resonator/bundle
+qresaudit analyze examples/demo_resonator/bundle
+qresaudit report examples/demo_resonator/bundle --output demo-report
+```
+
+The demo includes a checksummed bundle, analytic notch-response Touchstone data,
+paired synthetic E/H fields, convergence evidence, declared expected results, and
+an end-to-end report workflow. It is explicitly not an HFSS result or a real-solver
+validation benchmark. See
+[`examples/demo_resonator/README.md`](examples/demo_resonator/README.md).
+
+Other portable commands:
+
+```powershell
 qresaudit benchmark
 qresaudit analyze path/to/real/bundle
 qresaudit report path/to/real/bundle --output report

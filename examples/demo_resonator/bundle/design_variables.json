@@ -1,0 +1,17 @@
+{
+  "center_width": {
+    "evaluated_value": 10.0,
+    "expression": "10 um",
+    "unit": "um"
+  },
+  "gap": {
+    "evaluated_value": 6.0,
+    "expression": "6 um",
+    "unit": "um"
+  },
+  "length": {
+    "evaluated_value": 0.005099573269685811,
+    "expression": "c/(4*f0*sqrt(epsilon_eff))",
+    "unit": "m"
+  }
+}

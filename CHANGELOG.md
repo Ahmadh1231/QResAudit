@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added an original, deterministic quarter-wave CPW demo bundle with analytic
+  Touchstone data, paired synthetic fields, convergence evidence, expected fit
+  targets, report instructions, and end-to-end regression tests.
+
 ## 2.0.0 - 2026-07-25
 
 - Removed silent unit-volume, cubic-grid, field-order, one-cubic-meter sample, and
